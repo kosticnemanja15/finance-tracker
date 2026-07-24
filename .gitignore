@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Env — NIKAD u git
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Next.js (Dan 17)
+.next/
+out/

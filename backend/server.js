@@ -4,6 +4,7 @@ import cors from 'cors';
 import { config } from './config.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { NotFoundError } from './errors/ApiError.js';
+import authRouter from './routes/auth.js';
 
 // Router importi — dodajemo od Dana 14
 // import authRouter from './routes/auth.js';
@@ -30,12 +31,14 @@ app.get('/health', (req, res) => {
 });
 
 // Rute — mount-ujemo od Dana 14
-// app.use('/auth', authRouter);
+app.use('/auth', authRouter);
 
 // 404 — sve što nije uhvatila nijedna ruta iznad
 app.use((req, res, next) => {
   next(new NotFoundError(`Route not found: ${req.method} ${req.originalUrl}`));
 });
+
+
 
 // Error handler MORA biti poslednji
 app.use(errorHandler);

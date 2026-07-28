@@ -1,0 +1,269 @@
+{
+  "info": {
+    "name": "Finance Tracker API",
+    "description": "Personal Finance Tracker — backend API.\n\nDan 14: Auth (register/login/me) + Users CRUD (RBAC + ownership + soft delete).\n\n## Kako koristiti\n1. Podesi `baseUrl` varijablu (default: http://localhost:3000)\n2. Pozovi **Auth > Login (Ana - admin)** ili **Login (Marko - user)** — token se AUTOMATSKI upisuje u `token` varijablu (vidi Scripts tab).\n3. Svi zaštićeni zahtevi koriste `{{token}}` iz Authorization header-a.\n4. Za testiranje RBAC/ownership: uloguj se kao Marko pa probaj admin-only rute — očekuj 403.\n\n## Seed nalozi\n- ana@test.com / password123 (admin)\n- marko@test.com / password123 (user)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Dokazuje da ceo middleware chain radi. Bez auth-a."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /auth/register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Auto-upis tokena posle uspesne registracije",
+                  "if (pm.response.code === 201) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.token) {",
+                  "        pm.collectionVariables.set('token', json.token);",
+                  "        console.log('Token upisan (register):', json.token.slice(0, 20) + '...');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@test.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Javan endpoint. `role` se IGNORISE cak i ako se posalje (anti privilege-escalation) — novi user je uvek 'user'. Vraca { user, token } (201)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /auth/login (Ana - admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Auto-upis tokena posle uspesnog login-a",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.token) {",
+                  "        pm.collectionVariables.set('token', json.token);",
+                  "        console.log('Token upisan (Ana):', json.token.slice(0, 20) + '...');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ana@test.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login kao admin. Token se automatski upisuje u {{token}} varijablu."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /auth/login (Marko - user)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.token) {",
+                  "        pm.collectionVariables.set('token', json.token);",
+                  "        console.log('Token upisan (Marko):', json.token.slice(0, 20) + '...');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"marko@test.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login kao obican user. Koristi za testiranje RBAC/ownership (admin-only rute treba da vrate 403)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /auth/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Vraca { id, email, role } iz verifikovanog JWT-a. Ne dira `users` niz."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "GET /users (admin only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            },
+            "description": "Lista svih user-a. SAMO admin (requireRole). Obican user → 403. Bez tokena → 401. Nikad ne vraca password_hash."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /users/:id (admin ili sam)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/2",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "2"]
+            },
+            "description": "Ownership pattern: admin vidi bilo koga, user vidi samo sebe. Marko → /users/1 (Ana) treba 403."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /users/:id (name — dozvoljeno)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Novo Ime\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/2",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "2"]
+            },
+            "description": "Ownership + parcijalni update. User sme svoj name/email."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /users/:id (role — samo admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/2",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "2"]
+            },
+            "description": "role/isActive sme SAMO admin (Pattern 1). Obican user koji posalje role → 403 'You cannot change role or account status'. Admin → 200."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /users/:id (soft delete, admin only)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/2",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "2"]
+            },
+            "description": "Soft delete — postavlja isActive:false, ne brise iz niza. Samo admin. Vraca 204 No Content. Posle ovoga Markov login → 403 'Account is deactivated'."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

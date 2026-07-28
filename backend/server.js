@@ -5,6 +5,7 @@ import { config } from './config.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { NotFoundError } from './errors/ApiError.js';
 import authRouter from './routes/auth.js';
+import usersRouter from './routes/users.js';
 
 // Router importi — dodajemo od Dana 14
 // import authRouter from './routes/auth.js';
@@ -32,6 +33,8 @@ app.get('/health', (req, res) => {
 
 // Rute — mount-ujemo od Dana 14
 app.use('/auth', authRouter);
+app.use('/users', usersRouter); 
+
 
 // 404 — sve što nije uhvatila nijedna ruta iznad
 app.use((req, res, next) => {

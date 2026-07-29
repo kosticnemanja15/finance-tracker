@@ -75,3 +75,38 @@ if (!isAdmin && (req.body.role !== undefined || req.body.isActive !== undefined)
 - bcrypt hash format: `$2b$10$salt+hash`, 60 karaktera, salt unutar hash-a
 - JWT payload je samo base64 — nikad tajne unutra (`sub`, ne `id`; standard claim)
 -
+
+## Dan 15 — Categories + Transactions CRUD
+
+**Cilj:** Dva nova resursa sa CRUD-om i ownership pattern-om. Prva cross-resource validacija.
+
+### Urađeno
+- `data/categories.js` — 13 default kategorija (8 expense + 5 income), model sa `isDefault` + `userId`
+- `data/transactions.js` — prazan niz + `getNextId` sa guard-om za `Math.max(...[]) → -Infinity`
+- `schemas/categories.js` + `schemas/transactions.js` — Zod 4 (`z.iso.date()`, `.positive().finite()`, `.strict()`, `.refine()`)
+- `routes/categories.js` — CRUD sa dvoslojnim ownership-om
+- `routes/transactions.js` — CRUD sa ownership + admin override + cross-resource validacija
+- Sve testirano curl-om (7 testova categories + 10 transactions, svi prošli)
+
+### Ključne dizajn odluke
+- **Default kategorije menja/briše samo admin.** Privatne — samo vlasnik. Admin NE dira tuđe privatne (za razliku od users, gde ima override).
+- **POST kategorije — privilegija se odlučuje serverski.** Admin → sistemska (`isDefault:true, userId:null`); user → privatna (`isDefault:false, userId:<id>`). Klijent NE šalje ta polja (`.strict()` ih odbija).
+- **Transakcija i kategorija moraju biti istog tipa (strogo).** Expense transakcija samo u expense kategoriji. Razlog: Dan 16 stats bi bio pokvaren mismatch-om.
+
+### Novi patterni
+- **Cross-resource validacija** (`assertCategoryUsable`) — jedan resurs proverava drugi kroz 3 sloja:
+  1. postoji? → 400 CATEGORY_NOT_FOUND
+  2. vidljiva useru? → 403
+  3. type se poklapa? → 400 CATEGORY_TYPE_MISMATCH
+  Poziva se u POST i PATCH. U Fazi 2 → pravi foreign key.
+- **PATCH consistency trik** — kad se menja samo `categoryId`, uzmi *postojeći* type transakcije za proveru: `nextType = req.body.type ?? transaction.type`. Sprečava zaobilaženje pravila.
+- **Status kod semantika — URL vs body:** nepostojeći resurs iz URL-a → 404; loša referenca iz body-ja → 400. (Kategorija dolazi iz body-ja, pa 400 a ne 404.)
+- **Granica schema vs ruta:** schema validira *oblik* (je li broj pozitivan), ruta validira *postojanje i odnose* (postoji li taj id, sme li ga user videti). Schema nema pristup drugim resursima.
+- **Rule of Three izuzetak:** `assertCategoryUsable` izvučen na drugom ponavljanju (ne trećem) jer je logika netrivijalna (3 grane, 3 status koda) i lako se raziđe ako je duplirana.
+
+### Reinforcement (iz Dana 14)
+- Ownership guard: `if (!isSelf && !isAdmin) throw ForbiddenError`
+- `.strict()` mass assignment zaštita
+- Server postavlja `userId`/`createdAt`, nikad klijent
+
+**Status:** Dan 15 završen, commit-ovan. Ostaje za Dan 16: filteri, paginacija, stats, helmet, rate-limit, README.

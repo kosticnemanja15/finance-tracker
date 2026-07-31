@@ -19,6 +19,8 @@ router.get('/',
   })
 );
 
+
+
 // GET /users/:id — admin vidi bilo koga, user vidi samo sebe
 router.get('/:id',
   requireAuth,                          // 1. ulogovan?

@@ -110,3 +110,73 @@ if (!isAdmin && (req.body.role !== undefined || req.body.isActive !== undefined)
 - Server postavlja `userId`/`createdAt`, nikad klijent
 
 **Status:** Dan 15 završen, commit-ovan. Ostaje za Dan 16: filteri, paginacija, stats, helmet, rate-limit, README.
+
+## Dan 16 — Filteri + Paginacija + Stats + Security Hardening
+
+**Cilj:** Kompletirati transactions endpoint (filteri, paginacija, agregatna
+statistika) i dodati production security sloj (helmet, rate limiting) + README.
+
+### Urađeno
+
+**Filteri na `GET /transactions`:**
+- `?type`, `?categoryId`, `?from`, `?to` — svi opcioni, AND logika (lančani filteri)
+- Datum poređenje preko ISO string prefiksa (leksikografski = hronološki)
+- `TransactionsQuerySchema` sa `.refine()` za `from <= to` constraint (poređenje dva polja)
+- `z.coerce.number()` za query params (string → number)
+
+**Paginacija:**
+- `?page&limit` sa metadata omotom: `{ data, pagination: { page, total, hasMore } }`
+- `total` se hvata PRE slice-a (inače izgubljen)
+- `hasMore = end < total` (end je slice end-exclusive indeks)
+- Breaking change svest: response oblik promenjen sa golog niza na objekat (OK jer FE još ne postoji)
+
+**`GET /transactions/stats` (najkompleksniji deo):**
+- Route ordering: `/stats` registrovan PRE `/:id` (inače Express hvata "stats" kao :id param)
+- Period filter: `?year&month` → prefix string (`"2025-06"`) + `startsWith`
+  (svesno privremeno — u bazi će biti SQL agregacija)
+- `month` zero-padded (`String(month).padStart(2, '0')`)
+- Total income/expense: jedan prolaz `for...of` sa dva akumulatora
+- `byCategory`: grupisanje preko `Map` (`get() ?? 0` pattern), pa konverzija u niz sa
+  category name lookup-om (+ guard za obrisanu kategoriju)
+
+**Security hardening:**
+- **helmet** — security headeri (uklonjen `X-Powered-By`, dodati CSP, HSTS, nosniff, itd.),
+  prvi u middleware chain-u
+- **express-rate-limit** — izvučeno u `middleware/rateLimit.js`:
+  - `globalLimiter`: 100 req / 15 min (sve rute)
+  - `authLimiter`: 5 neuspešnih pokušaja / 15 min na `/auth/login` + `/register`
+  - `skipSuccessfulRequests: true` — broji samo promašaje (uspešan login ne troši kvotu)
+- Middleware redosled: helmet → morgan → limiter → cors → json (odbij rano, loguj sve)
+
+**README.md:**
+- Kompletna API dokumentacija (engleski — portfolio za remote EU)
+- Endpoint tabele, setup uputstvo, curl primeri, error format, security pregled
+
+### Testirano (curl)
+
+- Filteri: type/categoryId/from/to pojedinačno + kombinovano (AND) ✓
+- Range validacija: `from > to` → 400 ✓
+- Paginacija: page/limit slice + metadata, prazan niz edge case ✓
+- Stats: pun period, jun (year+month), prazan period (2024) — sve sume tačne ✓
+- byCategory grupisanje: Hrana 2 transakcije → 1 stavka (7700) ✓
+- helmet: `X-Powered-By` nestao, security headeri prisutni ✓
+- globalLimiter: 100× 200, pa 429 ✓
+- authLimiter: 5× 401, pa 429 ✓ (sa pogrešnom lozinkom)
+
+### Naučeno / patterni
+
+- Route ordering za statičke vs dinamičke rute (statička pre parametarske)
+- `total` pre slice-a — redosled operacija menja rezultat
+- `Map` za grupisanje/agregaciju sa `?? 0` init pattern-om
+- `skipSuccessfulRequests` — rate limit koji ne kažnjava legitimne korisnike
+- Middleware redosled kao performance odluka, ne samo tačnost (odbij pre nego trošiš rad)
+- "Koliko robusno vredi kod čiji je životni vek kratak" — startsWith umesto date parsing
+  jer ceo in-memory filter nestaje u Fazi 2
+
+### Ostalo za kasnije (svesno preskočeno)
+
+- Rate limit po korisniku umesto po IP-u (problem iza NAT/proxy) — Faza 2+
+- Date parsing umesto string prefix — rešava baza u Fazi 2
+- byCategory razdvajanje income/expense za pie chart — frontend odluka (Dan 19)
+
+**Dan 16 završen. Backend MVP kompletan — spreman za frontend (Dan 17).**

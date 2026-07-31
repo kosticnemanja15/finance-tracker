@@ -9,12 +9,14 @@ import { toUserDTO } from '../utils/sanitize.js';
 import { RegisterSchema , LoginSchema } from '../schemas/auth.js';
 import { UnauthorizedError, ForbiddenError , ConflictError } from '../errors/ApiError.js';
 import { requireAuth } from '../middleware/auth.js';
+import { authLimiter } from '../middleware/rateLimit.js';
 
 
 const router = Router();
 
 // POST /auth/register
 router.post('/register',
+  authLimiter,
   validateBody(RegisterSchema),
   asyncHandler(async (req, res) => {
     const { name, email, password } = req.body;
@@ -57,6 +59,7 @@ router.post('/register',
 
 // POST /auth/login
 router.post('/login',
+    authLimiter,
   validateBody(LoginSchema),
   asyncHandler(async (req, res) => {
     const { email, password } = req.body;

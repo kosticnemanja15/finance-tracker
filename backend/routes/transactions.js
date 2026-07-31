@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { transactions, getNextId } from '../data/transactions.js';
 import { categories } from '../data/categories.js';
-import { validateBody, validateParams } from '../middleware/validate.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../errors/ApiError.js';
@@ -10,6 +10,8 @@ import {
   TransactionIdParamSchema,
   CreateTransactionSchema,
   UpdateTransactionSchema,
+  TransactionsQuerySchema,
+  StatsQuerySchema,
 } from '../schemas/transactions.js';
 
 const router = Router();
@@ -47,13 +49,98 @@ function assertCategoryUsable(categoryId, transactionType, user) {
 // GET /transactions → moje transakcije (admin vidi sve)
 router.get('/',
   requireAuth,
+  validateQuery(TransactionsQuerySchema),
   asyncHandler(async (req, res) => {
-    const result = req.user.role === 'admin'
+
+    let result = req.user.role === 'admin'
       ? transactions
       : transactions.filter(t => t.userId === req.user.id);
 
-    res.json(result);
+    const{type,categoryId,from,to,page,limit} = req.validatedQuery;
+
+     if(type){
+        result = result.filter(t => t.type === type);
+     } 
+     if(categoryId){
+        result = result.filter(t => t.categoryId === categoryId);
+     }
+     if(from){
+        result = result.filter(t => t.date >= from);
+     }
+      if(to){
+        result = result.filter(t => t.date <= to);
+     }
+
+    // Paginacija (ako je već želiš iskoristiti)
+    const total = result.length;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+
+    const data = result.slice(start,end);
+    const hasMore = end < total;
+
+    res.json({
+        data,
+        pagination: {page,total,hasMore}
+    });
   })
+);
+
+router.get('/stats', 
+    requireAuth,
+    validateQuery(StatsQuerySchema),
+    asyncHandler(async(req,res) => {
+      const{year,month} = req.validatedQuery;
+
+     
+      let result = transactions.filter(t => t.userId === req.user.id);
+
+
+      if (year) {
+        let prefix = String(year);
+        if (month) {
+          prefix = `${year}-${String(month).padStart(2,'0')}`;
+        }
+        result = result.filter(t => t.date.startsWith(prefix));
+      }
+
+      // 3. Total income / expense — prođi JEDNOM kroz result
+      //    hint: reduce ili for...of, akumuliraj dve sume
+      let totalIncome = 0;
+      let totalExpense = 0;
+     
+      for(const transaction of result){
+        if(transaction.type === 'income'){
+          totalIncome += transaction.amount;
+        } else {
+          totalExpense += transaction.amount;
+        }
+      }
+
+      // 4. balance
+      const balance = totalIncome - totalExpense;
+
+      // 5. Grupiši po kategoriji
+      const byCategoryMap = new Map();
+
+      for (const t of result) {
+        const current = byCategoryMap.get(t.categoryId) ?? 0;  // postojeća suma ili 0
+        byCategoryMap.set(t.categoryId, current + t.amount);
+      }
+
+      // 6. Pretvori Map u niz + dodaj categoryName (lookup u categories)
+      const byCategory = [];
+      for (const [categoryId, total] of byCategoryMap) {
+        const category = categories.find(c => c.id === categoryId);
+        byCategory.push({
+          categoryId,
+          categoryName: category ? category.name : 'Unknown',  // guard ako je kategorija obrisana
+          total,
+        });
+      }
+
+      res.json({ totalIncome, totalExpense, balance, byCategory });
+    })
 );
 
 // GET /transactions/:id → jedna (moja ili admin)

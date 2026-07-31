@@ -26,3 +26,22 @@ export const UpdateTransactionSchema = z.object({
   (data) => Object.keys(data).length > 0,
   { message: 'At least one field must be provided' }
 );
+
+// Query schema za GET /transactions — filteri + paginacija u jednom
+export const TransactionsQuerySchema = z.object({
+  type: z.enum(['income', 'expense']).optional(),
+  categoryId: z.coerce.number().int().positive().optional(),
+  from: z.iso.date().optional(),   // "YYYY-MM-DD"
+  to: z.iso.date().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+}).refine(
+  // ako su oba data, from mora biti <= to
+  (q) => !q.from || !q.to || q.from <= q.to,
+  { message: 'from must be before or equal to to', path: ['from'] }
+);
+
+export const StatsQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+  month: z.coerce.number().int().min(1).max(12).optional(),
+});

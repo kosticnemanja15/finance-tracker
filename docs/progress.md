@@ -180,3 +180,85 @@ statistika) i dodati production security sloj (helmet, rate limiting) + README.
 - byCategory razdvajanje income/expense za pie chart — frontend odluka (Dan 19)
 
 **Dan 16 završen. Backend MVP kompletan — spreman za frontend (Dan 17).**
+
+## Dan 17 — Frontend Setup + Auth Flow
+
+**Cilj:** Skafolđovati Next.js frontend i napraviti kompletan auth flow
+(api client, context, login/register, zaštita ruta) integrisan sa backendom.
+
+### Setup (rešen OS blocker)
+- **Big Sur/Node inkompatibilnost:** Node 24 build-ovan za macOS 13+ → `dyld` crash
+  na Big Sur 11.7. Rešenje: Node 20.20.0 (poslednji v20, OS-kompatibilan), zaključan
+  kao nvm default. Plafon je Node 20 dok se ne promeni OS.
+- Frontend reinstaliran čisto: **Next 14.2.4** (ne 16 — v16 traži noviji Node +
+  Tailwind v4 frikcija). Stack: src/app, TypeScript, **Tailwind v3**, App Router.
+- Paketi: react-hook-form, @hookform/resolvers, zod, next-themes, recharts, lucide-react
+- **shadcn init** sa `@2.3.0` (ne @latest — najnoviji cilja Tailwind v4, mi smo v3).
+  Base: Stone (topao, prati design-concept), CSS variables: Yes.
+- Port 3001 (backend drži 3000), `.env.local` sa NEXT_PUBLIC_API_URL.
+
+### Fajlovi
+- `lib/api.ts` — ApiError klasa, token helpers (SSR-safe), `apiFetch<T>` wrapper
+- `context/AuthContext.tsx` — login/logout/register + hydration
+- `types/index.ts` — User interface (ogledalo backend DTO-a)
+- `schemas/auth.ts` — LoginSchema + RegisterSchema (Zod, izdvojene kao na backendu)
+- `app/login/page.tsx` + `app/register/page.tsx` — RHF + Zod forme
+- `components/AuthGuard.tsx` — zaštita privatnih ruta
+- `app/(protected)/layout.tsx` — route group layout sa AuthGuard-om
+- `app/(protected)/dashboard/page.tsx` — placeholder (pravi dashboard = Dan 19)
+- `app/page.tsx` — `/` → redirect na /dashboard
+
+### Ključni patterni
+
+**API client (pristup A — throw ApiError):**
+- `apiFetch` baca `ApiError` na grešku (paralela backend ApiError-u), React sloj hvata
+- Automatski Bearer header iz localStorage tokena
+- **401 auto-cleanup** — nevažeći/istekao token se sam briše (`clearToken()` u 401 grani)
+- SSR guard obavezan — `typeof window === "undefined"` pre localStorage (Next renderuje
+  i na serveru gde window ne postoji)
+- 204 handling — DELETE nema body, `res.json()` bi pukao bez guarda
+
+**Hydration (opcija 1 — /auth/me):**
+- Pri startu app-a: ima token? → pozovi `/auth/me` → svež user + validacija tokena
+- Izabrano vs localStorage-cache jer: RBAC traži svežu rolu, token se validira odmah,
+  jedan brz poziv je zanemarljiv trošak za korektnost
+- **`isLoading` treće stanje** — kritično: `user: null` tokom hydration NIJE isto kao
+  "nije ulogovan". Bez isLoading flag-a guard bi bacao ulogovanog usera na login pri
+  svakom refresh-u (flash bug).
+
+**Auth forme (RHF + Zod):**
+- `zodResolver` spaja Zod sa React Hook Form, `z.infer` = tip iz šeme (jedan izvor istine)
+- Login password: `.min(1)` (samo prisutan) — NE `.min(8)`. Jačina se validira samo pri
+  registraciji, inače stari korisnici sa kraćom lozinkom ne mogu da se uloguju.
+- Field greške (Zod) odvojene od backend grešaka (formError state za 401/409)
+- **Sudar imena** u register-u: RHF `register` vs auth `register` → `register: registerUser`
+
+**Route protection (opcija A — route group):**
+- `(protected)` folder = route group, zagrade znače da NE utiče na URL
+  (/dashboard ostaje /dashboard, ne /protected/dashboard)
+- Guard se piše JEDNOM u layout-u → sve buduće privatne rute nasleđuju zaštitu
+- AuthGuard tri stanja renderovanja: isLoading→"Loading", !user→null (redirect ide),
+  user→children
+- `router.replace` ne `push` (ne želimo redirect u istoriji browsera)
+- **Obrnuti guard** na auth stranicama: ulogovan na /login → redirect na /dashboard
+
+### Zod verzija napomena
+- Frontend: **Zod 3.25.76**, backend: Zod 4 → version drift.
+- 3.25 podržava obe sintakse; koristili `z.string().email()` (univerzalno sigurna).
+- Poravnanje verzija = Faza 3 (monorepo shared schemas).
+
+### Testirano (browser + DevTools)
+- api.ts lanac: validan token → /auth/me 200 + Bearer header ✓
+- 401 auto-cleanup: bajat token → 401 → token nestaje iz localStorage ✓
+- Nema tokena → nema /auth/me poziva (efikasnost) ✓
+- Login: validacija, pogrešna lozinka (401), uspešan → redirect ✓
+- Register: validacija, postojeći email (409), nov → auto-login + redirect ✓
+- Route guard 4 scenarija: neulogovan odbačen, ulogovan prolazi, ulogovan odbačen
+  sa /login, logout čisti token ✓
+
+### Ostalo za kasnije (svesno)
+- Dizajn: login/register namerno tiho stilizovani. Brand tokeni (Bricolage font,
+  coral/teal) + Balance Hero = poseban foundation korak, Dan 19.
+- httpOnly cookie umesto localStorage (XSS trade-off) — Faza 2.
+
+**Dan 17 završen. Auth flow kompletan i testiran. Spreman za Transactions UI (Dan 18).**

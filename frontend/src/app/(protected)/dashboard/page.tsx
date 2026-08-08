@@ -2,9 +2,12 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
+import { toast } from 'sonner';
+import { useCategories } from "@/context/CategoriesContext";
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
+  const { categories, isLoading } = useCategories();
 
   return (
     <div className="min-h-screen p-8">
@@ -16,6 +19,8 @@ export default function DashboardPage() {
         <Button onClick={logout} variant="outline">
           Log out
         </Button>
+
+        <p>{isLoading ? 'Loading...' : `${categories.length} kategorija`}</p>
       </div>
     </div>
   );

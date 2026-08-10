@@ -261,4 +261,40 @@ statistika) i dodati production security sloj (helmet, rate limiting) + README.
   coral/teal) + Balance Hero = poseban foundation korak, Dan 19.
 - httpOnly cookie umesto localStorage (XSS trade-off) — Faza 2.
 
-**Dan 17 završen. Auth flow kompletan i testiran. Spreman za Transactions UI (Dan 18).**
+## Dan 18 — Transactions UI ✅
+
+**Cilj:** Kompletan CRUD UI za transakcije sa filterima, paginacijom i ownership zaštitom.
+
+### Napravljeno
+- **context/CategoriesContext.tsx** — shared context, mount u (protected) layout-u,
+  `getById` helper za categoryId → ime/ikonica lookup, fetch jednom posle auth-a
+- **hooks/useTransactions.ts** — custom hook: race-safe fetch (signal guard),
+  buildQuery serijalizacija filtera u stabilan useEffect dep, refetch za create/delete
+- **components/CategoryPicker.tsx** — reusable kontrolisana komponenta,
+  string↔number premoštavanje na granici, filtrira opcije po tipu
+- **app/(protected)/dashboard/transactions/page.tsx** — lista + filteri (type,
+  categoryId, from/to) + Prev/Next pagination + reset-na-stranu-1 pri promeni filtera
+- **app/(protected)/dashboard/transactions/new/page.tsx** — RHF + Zod create forma
+- **app/(protected)/dashboard/transactions/[id]/page.tsx** — detalj + edit,
+  ownership handling (403/404 razdvojeni), reset() za async popunu, delete dialog
+- **schemas/transactions.ts** — CreateTransactionSchema + UpdateTransactionSchema (z.infer)
+- **components/ui/sonner.tsx** + **components/ui/alert-dialog.tsx** — shadcn
+
+### Naučeno / patterni
+- **Race condition guard** — signal objekat + closure: samo poslednji fetch dira state
+- **Objekat kao useEffect dep** — serijalizuj u string (nova referenca svaki render)
+- **Controlled component + RHF Controller** — za select/custom komponente
+- **valueAsNumber** — RHF number input inače vraća string, Zod puca
+- **Ownership na FE** — 403 (tuđe) vs 404 (ne postoji), admin izuzetak
+- **In-memory backend gubi podatke na restart** → motivacija za Fazu 2 (Postgres)
+
+### Backend fix (dev-only, config per environment)
+- Rate limiter — `skip: () => config.env !== 'production'` (blokirao testiranje)
+- JWT_EXPIRES_IN=7d u dev .env (15m ostaje production default)
+
+### Status kodovi viđeni
+- 201 (create), 200 (read), 204 (delete), 304 (cache), 401 (no token),
+  403 (ownership), 429 (rate limit)
+
+### Ostaje za sledeći dan
+- Refaktor: `<TransactionForm>` izdvajanje (/new i /[id] dele skoro istu formu)

@@ -298,3 +298,43 @@ statistika) i dodati production security sloj (helmet, rate limiting) + README.
 
 ### Ostaje za sledeći dan
 - Refaktor: `<TransactionForm>` izdvajanje (/new i /[id] dele skoro istu formu)
+
+## Dan 19 — Dashboard + Charts + Admin (ZAVRŠENO)
+
+**Cilj:** Pravi dashboard sa statistikom, grafikonima, brand identitetom i admin panelom.
+
+### Urađeno
+- **Brand foundation** — Bricolage + Inter fontovi (next/font, self-hosted, latin-ext za srpske znakove). 6 brand tokena u tailwind.config: brand #FF5A5F, income #0FA47F (teal), expense #E8524E (coral), ink, cloud, night. darkMode: 'class' infra postavljena (toggle UI backlog).
+- **lib/format.ts** — formatRSD + formatSignedRSD (srpski format, RSD, pravi minus znak U+2212, tabular-nums). sr-Latn za tekst (naziv meseca), sr-RS za brojeve.
+- **hooks/useStats.ts** — po useTransactions kalupu (useCallback + signal objekat, race-safe). Prima year/month, refetch na promenu. Vraća refetch za buduću upotrebu.
+- **components/BalanceHero.tsx** — SIGNATURE komponenta. Ogroman saldo (font-display, text-6xl) koji menja boju: teal plus / coral minus. Prihod/rashod podređeni. Burn bar (rashod/prihod %) sa guard-om protiv deljenja nulom, clamp na 100% vizuelno ali tekst pokazuje pravi %.
+- **components/CategoryPieChart.tsx** — Recharts (prva biblioteka u projektu). Samo rashodi (filter po type iz CategoriesContext preko getById). Top 6 + "Ostalo". Tooltip formatiran u RSD. Cell deprecated warning ostavljen (Recharts 4.0 stvar, nizak prioritet).
+- **lib/chartData.ts** — buildExpensePie čista funkcija (filter rashoda, sort, top-N grupisanje). Testabilno za Fazu 3.
+- **components/MonthYearPicker.tsx** — dva selecta (mesec 1-12 srpski nazivi, godina tekuća + 2 unazad). year/month postali state u page.tsx umesto konstanti.
+- **Admin dashboard + RBAC:**
+  - hooks/useUsers.ts — treći hook po istom kalupu (bez argumenata, prazan useCallback array, User[] default)
+  - components/AdminGuard.tsx — redirect logika u useEffect (login ako neulogovan, dashboard ako non-admin), null render dok redirect ne odradi (blok bleska)
+  - app/(protected)/admin/page.tsx — tabela usera (ime/email/role, admin badge u brand boji). AdminContent razdvojen od AdminPage da useUsers ne fetch-uje pre nego guard propusti.
+
+### Testirano
+- Dashboard: Balance Hero (teal saldo), pie 3 rashodne kriške, filter menja mesec, prazan mesec → empty state bez padanja
+- Admin: Ana (admin) vidi tabelu, Marko (user) redirect na /dashboard bez bleska, izlogovan → /login
+
+### Svesno prebačeno (nije dug — odluka)
+- **Line chart (Monthly Trend) → Faza 2.** Traži trend kroz više meseci = yearly endpoint (GROUP BY month). Backend je zamrznut + in-memory; prirodno mesto je Faza 2 kad ionako prelazim na Postgres (tamo je agregacija trivijalan SQL). Line chart bez pravih podataka = prazan grafikon na portfoliju, gore nego da ga nema.
+- **TransactionForm refaktor → Dan 20.** Rule of Three dug iz Dana 18 (/new i /[id] dele skoro istu formu). Prebačen jer refaktor traži oba fajla u glavi odjednom — najbolje svež, umoran refaktor pravi nove bugove u kodu koji već radi.
+
+### Backlog (kasnije, ne Dan 20)
+- Klik na pie krišku → /transactions?categoryId=X (cross-page nav)
+- Prosek troškova / godišnji saldo (uz yearly endpoint, Faza 2)
+- Recharts Cell → shape migracija (samo ako pređem na v4)
+- Admin nav link vidljiv samo adminu
+- Dark mode toggle UI (infra već postavljena)
+
+### Naučeno
+- next/font dupli-import zamka: create-next-app već ima Inter setup, dodavanje preko pravi ts(2440) konflikt. Rešenje — obriši stari.
+- sr-RS locale vraća ćirilicu za tekst (naziv meseca). sr-Latn za latinicu. Brojevi isti u oba pisma.
+- Tailwind ne može dinamički w-[X%] iz runtime varijable (JIT ne vidi vrednosti) → inline style za procente.
+- Recharts ResponsiveContainer obavezan (bez njega chart 0px). Cell per-slice boje. formatter value je ValueType union, ne number → Number() koercija.
+- RBAC guard: redirect je side-effect → useEffect, nikad render telo. null render dok redirect ne odradi (blok bleska privatnog sadržaja).
+- Hook kalup (useStats/useUsers) treći put primenjen — jezgro identično, menja se samo tip + endpoint + zavisnosti.

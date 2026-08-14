@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";  // Next 14 App Router (NE 'next/router')
-import { apiFetch, setToken, clearToken, getToken } from "@/lib/api";
+import { apiFetch, setToken, clearToken, getToken, ApiError } from "@/lib/api"; // ← dodat ApiError
 import type { User } from "@/types";
 
 // ------------------------------------------------------------
@@ -57,10 +57,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const data = await apiFetch<MeResponse>("/auth/me");
         setUser(data.user);
-      } catch {
-        // 401 → apiFetch je već očistio token. User ostaje null.
-        // Bilo koja druga greška → tretiramo kao "nije ulogovan" (sigurnije).
-        setUser(null);
+      } catch (err) {
+        // Razlikuj "token nevažeći" od "backend nedostupan".
+        if (err instanceof ApiError && err.status === 401) {
+          // 401 = token stvarno nevažeći/istekao. apiFetch je već očistio token.
+          // Legitimno: nisi ulogovan.
+          setUser(null);
+        } else {
+          // Network fail, 500, timeout... backend je nedostupan ali token
+          // je i dalje tu i možda validan. NE briši token —
+          // sledeći refresh kad backend oживи će te rekonstruisati.
+          console.error("Hydration failed (backend unreachable?):", err);
+        }
       } finally {
         setIsLoading(false);  // Proverili smo — hydration gotov, bez obzira na ishod.
       }

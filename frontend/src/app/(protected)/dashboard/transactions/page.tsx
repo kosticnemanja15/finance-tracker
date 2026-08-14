@@ -73,8 +73,8 @@ function handleTypeChange(value: string) {
         </div>
 
         {/* Filter bar */}
-        <div className="flex flex-wrap items-end gap-3 rounded border p-4">
-          <div className="flex flex-col gap-1">
+        <div className="flex flex-col flex-wrap items-stretch gap-3 rounded border p-4 sm:flex-row sm:items-end">
+          <div className="flex w-full flex-col gap-1 sm:w-auto">
             <label className="text-xs text-muted-foreground">Tip</label>
             <select
               value={filters.type}
@@ -87,7 +87,7 @@ function handleTypeChange(value: string) {
             </select>
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex w-full flex-col gap-1 sm:w-auto">
             <label className="text-xs text-muted-foreground">Kategorija</label>
             <select
               value={filters.categoryId}
@@ -103,7 +103,7 @@ function handleTypeChange(value: string) {
             </select>
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex w-full flex-col gap-1 sm:w-auto">
             <label className="text-xs text-muted-foreground">Od</label>
             <input
               type="date"

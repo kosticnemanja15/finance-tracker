@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { getToken } from "@/lib/api";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -10,13 +11,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   // Redirect logika u useEffect (NE u render telu — router.push tokom
   // rendera baca grešku u React-u).
-  useEffect(() => {
-    // Čekaj da hydration završi. Dok isLoading, NE odlučuj ništa —
-    // inače izbacimo ulogovanog usera na tren dok /auth/me ne odgovori.
-    if (!isLoading && !user) {
-      router.replace("/login");  // replace, ne push: ne želimo /dashboard u istoriji
-    }
-  }, [isLoading, user, router]);
+useEffect(() => {
+  // Izbaci na login SAMO ako nema usera I nema tokena.
+  // Ako token postoji ali user je null → backend je verovatno pao
+  // tokom hydration-a. Ne izbacuj — token je i dalje validan,
+  // stranica će sama pokazati grešku.
+  if (!isLoading && !user && !getToken()) {
+    router.replace("/login");
+  }
+}, [isLoading, user, router]);
 
   // ---- Šta se renderuje DOK odlučujemo ----
 
@@ -32,7 +35,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   // 2. Hydration gotov, ali nema usera → redirect je već pokrenut u useEffect.
   //    Renderuj ništa da se privatni sadržaj NE blesne pre redirect-a.
-  if (!user) {
+  if (!user && !getToken()) {
     return null;
   }
 

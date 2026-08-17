@@ -21,7 +21,7 @@ app.use(morgan(config.env === 'production' ? 'combined' : 'dev'));
 app.use(globalLimiter);  
 app.use(cors({
   origin: config.env === 'production'
-    ? ['https://finance-tracker.vercel.app'] // TODO: pravi URL u Danu 20
+    ? config.frontendUrl
     : '*',
   credentials: true,
 }));

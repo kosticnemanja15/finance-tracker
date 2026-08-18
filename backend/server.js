@@ -33,6 +33,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     env: config.env,
+    frontendUrl: config.frontendUrl,   // ← privremeno, za debug
     timestamp: new Date().toISOString(),
   });
 });

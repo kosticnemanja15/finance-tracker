@@ -33,7 +33,11 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     env: config.env,
-    frontendUrl: config.frontendUrl,   // ← privremeno, za debug
+    frontendUrl_fromConfig: config.frontendUrl,           // preko config.js
+    frontendUrl_fromProcess: process.env.FRONTEND_URL,    // sirov process.env
+    allEnvKeys: Object.keys(process.env).filter(k =>      // koje env varijable proces uopšte vidi
+      ['FRONTEND_URL', 'NODE_ENV', 'JWT_SECRET', 'JWT_EXPIRES_IN', 'BCRYPT_COST'].includes(k)
+    ),
     timestamp: new Date().toISOString(),
   });
 });

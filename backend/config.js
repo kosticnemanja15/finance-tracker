@@ -23,8 +23,5 @@ export const config = {
   port: parseInt(process.env.PORT || '3000', 10),
   env: process.env.NODE_ENV || 'development',    
   frontendUrl: process.env.FRONTEND_URL,
-<<<<<<< HEAD
 };
-=======
-};
->>>>>>> 7747226 (server,config update)
+

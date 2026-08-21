@@ -21,8 +21,8 @@ export default function DashboardPage() {
 
   const { data, isLoading, error } = useStats(year, month);
 
-  // Srpski naziv meseca za Hero (npr. "avgust 2026")
-  const monthLabel = new Date(year, month - 1).toLocaleDateString("sr-Latn", {
+// English month name for Hero (e.g. "August 2026")
+  const monthLabel = new Date(year, month - 1).toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
   });

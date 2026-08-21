@@ -74,7 +74,7 @@ export function TransactionForm({
       {/* CATEGORY */}
       <div className="space-y-1">
         <label htmlFor="categoryId" className="text-sm font-medium">
-          Cetegory
+          Category
         </label>
         <Controller
           control={control}

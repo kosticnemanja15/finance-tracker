@@ -41,7 +41,7 @@ export default function DashboardPage() {
         {/* Header: welcome + logout */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-display text-2xl">Pregled</h1>
+            <h1 className="font-display text-2xl">Overview</h1>
             <p className="text-sm text-muted-foreground">
               {user?.name} ({user?.role})
             </p>
@@ -61,17 +61,17 @@ export default function DashboardPage() {
 
         {/* Stats sekcija */}
         {isLoading ? (
-          <p className="text-muted-foreground">Učitavanje…</p>
+          <p className="text-muted-foreground">Loading…</p>
         ) : error ? (
-          <p className="text-expense">Greška: {error}</p>
+          <p className="text-expense">Error: {error}</p>
         ) : !data ? (
-          <p className="text-muted-foreground">Nema podataka.</p>
+          <p className="text-muted-foreground">No data.</p>
         ) : (
           <>
             <BalanceHero stats={data} monthLabel={monthLabel} />
 
             <div className="rounded-xl border border-border bg-card p-5">
-              <h2 className="font-display text-lg mb-4">Rashodi po kategoriji</h2>
+              <h2 className="font-display text-lg mb-4">Expenses by category</h2>
               <CategoryPieChart data={pieData} />
             </div>
           </>

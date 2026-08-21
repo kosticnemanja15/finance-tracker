@@ -44,11 +44,11 @@ export default function TransactionDetailPage() {
       } catch (err) {
         if (signal.cancelled) return;
         if (err instanceof ApiError) {
-          if (err.status === 403) setLoadError('Nemate pristup ovoj transakciji.');
-          else if (err.status === 404) setLoadError('Transakcija nije pronađena.');
+          if (err.status === 403) setLoadError("You don't have access to this transaction.");
+          else if (err.status === 404) setLoadError('Transaction not found.');
           else setLoadError(err.message);
         } else {
-          setLoadError('Greška pri učitavanju.');
+          setLoadError('Error loading transaction.');
         }
       } finally {
         if (!signal.cancelled) setIsLoading(false);
@@ -66,10 +66,10 @@ export default function TransactionDetailPage() {
         method: 'PATCH',
         body: JSON.stringify(data),
       });
-      toast.success('Izmene sačuvane');
+      toast.success('Changes saved');
       router.push('/dashboard/transactions');
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Greška pri čuvanju';
+      const message = err instanceof ApiError ? err.message : 'Error saving transaction';
       toast.error(message);
     }
   }
@@ -79,10 +79,10 @@ export default function TransactionDetailPage() {
     setIsDeleting(true);
     try {
       await apiFetch(`/transactions/${id}`, { method: 'DELETE' });
-      toast.success('Transakcija obrisana');
+      toast.success('Transaction deleted');
       router.push('/dashboard/transactions');
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Greška pri brisanju';
+      const message = err instanceof ApiError ? err.message : 'Error deleting transaction';
       toast.error(message);
       setIsDeleting(false);
     }
@@ -107,7 +107,7 @@ export default function TransactionDetailPage() {
             onClick={() => router.push('/dashboard/transactions')}
             className="rounded border px-4 py-2 text-sm hover:bg-muted"
           >
-            ← Nazad na listu
+            ← Back to list
           </button>
         </div>
       </div>
@@ -118,7 +118,7 @@ export default function TransactionDetailPage() {
   return (
     <div className="min-h-screen p-8">
       <div className="mx-auto max-w-md space-y-6">
-        <h1 className="text-2xl font-semibold">Izmeni transakciju</h1>
+        <h1 className="text-2xl font-semibold">Edit Transaction</h1>
         <TransactionForm
           defaultValues={{
             type: transaction!.type,
@@ -128,7 +128,7 @@ export default function TransactionDetailPage() {
             date: transaction!.date.slice(0, 10),
           }}
           onSubmit={handleSubmit}
-          submitLabel="Sačuvaj izmene"
+          submitLabel="Save changes"
           onCancel={() => router.push('/dashboard/transactions')}
           extraActions={
             <AlertDialog>
@@ -137,24 +137,24 @@ export default function TransactionDetailPage() {
                   type="button"
                   className="rounded border border-red-300 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                 >
-                  Obriši
+                  Delete
                 </button>
               </AlertDialogTrigger>
               <AlertDialogContent className="bg-white border shadow-lg">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Obrisati transakciju?</AlertDialogTitle>
+                  <AlertDialogTitle>Delete transaction?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Ova akcija je nepovratna. Transakcija će biti trajno obrisana.
+                    This action cannot be undone. The transaction will be permanently deleted.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel disabled={isDeleting}>Otkaži</AlertDialogCancel>
+                  <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleDelete}
                     disabled={isDeleting}
                     className="bg-red-600 hover:bg-red-700"
                   >
-                    {isDeleting ? 'Brišem...' : 'Obriši'}
+                    {isDeleting ? 'Deleting...' : 'Delete'}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

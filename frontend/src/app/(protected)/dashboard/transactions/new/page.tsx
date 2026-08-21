@@ -15,11 +15,11 @@ export default function NewTransactionPage() {
         method: 'POST',
         body: JSON.stringify(data),
       });
-      toast.success('Transakcija dodata');
+      toast.success('Transaction added');
       router.push('/dashboard/transactions');
     } catch (err) {
       const message =
-        err instanceof ApiError ? err.message : 'Greška pri čuvanju';
+        err instanceof ApiError ? err.message : 'Error saving transaction';
       toast.error(message);
     }
   }
@@ -27,10 +27,10 @@ export default function NewTransactionPage() {
   return (
     <div className="min-h-screen p-8">
       <div className="mx-auto max-w-md space-y-6">
-        <h1 className="text-2xl font-semibold">Nova transakcija</h1>
+        <h1 className="text-2xl font-semibold">New transaction</h1>
         <TransactionForm
           onSubmit={handleSubmit}
-          submitLabel="Sačuvaj"
+          submitLabel="Save"
           onCancel={() => router.push('/dashboard/transactions')}
         />
       </div>

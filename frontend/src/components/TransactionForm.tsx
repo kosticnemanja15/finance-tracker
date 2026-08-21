@@ -64,7 +64,7 @@ export function TransactionForm({
                     : 'border-input'
                 }`}
               >
-                {opt === 'expense' ? 'Rashod' : 'Prihod'}
+                {opt === 'expense' ? 'Expense' : 'Income'}
               </button>
             ))}
           </div>
@@ -74,7 +74,7 @@ export function TransactionForm({
       {/* CATEGORY */}
       <div className="space-y-1">
         <label htmlFor="categoryId" className="text-sm font-medium">
-          Kategorija
+          Cetegory
         </label>
         <Controller
           control={control}
@@ -96,7 +96,7 @@ export function TransactionForm({
       {/* AMOUNT */}
       <div className="space-y-1">
         <label htmlFor="amount" className="text-sm font-medium">
-          Iznos
+          Amount
         </label>
         <input
           id="amount"
@@ -113,7 +113,7 @@ export function TransactionForm({
       {/* DESCRIPTION */}
       <div className="space-y-1">
         <label htmlFor="description" className="text-sm font-medium">
-          Opis
+          Description
         </label>
         <input
           id="description"
@@ -129,7 +129,7 @@ export function TransactionForm({
       {/* DATE */}
       <div className="space-y-1">
         <label htmlFor="date" className="text-sm font-medium">
-          Datum
+          Date
         </label>
         <input
           id="date"
@@ -150,14 +150,14 @@ export function TransactionForm({
             disabled={isSubmitting}
             className="rounded bg-black px-4 py-2 text-sm text-white hover:bg-black/80 disabled:opacity-50"
           >
-            {isSubmitting ? 'Čuvam...' : submitLabel}
+            {isSubmitting ? 'Saving...' : submitLabel}
           </button>
           <button
             type="button"
             onClick={onCancel}
             className="rounded border px-4 py-2 text-sm hover:bg-muted"
           >
-            Otkaži
+            Cancel
           </button>
         </div>
         {extraActions}

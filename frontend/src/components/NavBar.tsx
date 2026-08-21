@@ -60,7 +60,7 @@ export function NavBar() {
             onClick={logout}
             className="rounded border px-3 py-1.5 text-sm hover:bg-muted"
           >
-            Logout
+            Logut
           </button>
         </div>
       </div>

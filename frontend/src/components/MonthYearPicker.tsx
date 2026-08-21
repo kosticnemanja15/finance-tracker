@@ -7,8 +7,8 @@ type Props = {
 
 // Srpski nazivi meseci (index 0 = januar)
 const MONTHS = [
-  "Januar", "Februar", "Mart", "April", "Maj", "Jun",
-  "Jul", "Avgust", "Septembar", "Oktobar", "Novembar", "Decembar",
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 
 // Tekuća + 2 unazad = 3 godine

@@ -75,26 +75,26 @@ function handleTypeChange(value: string) {
         {/* Filter bar */}
         <div className="flex flex-col flex-wrap items-stretch gap-3 rounded border p-4 sm:flex-row sm:items-end">
           <div className="flex w-full flex-col gap-1 sm:w-auto">
-            <label className="text-xs text-muted-foreground">Tip</label>
+            <label className="text-xs text-muted-foreground">Type</label>
             <select
               value={filters.type}
               onChange={(e) => handleTypeChange(e.target.value)}
               className="rounded border px-3 py-1.5 text-sm"
             >
-              <option value="">Sve</option>
-              <option value="income">Prihod</option>
-              <option value="expense">Rashod</option>
+              <option value="">All</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
             </select>
           </div>
 
           <div className="flex w-full flex-col gap-1 sm:w-auto">
-            <label className="text-xs text-muted-foreground">Kategorija</label>
+            <label className="text-xs text-muted-foreground">Category</label>
             <select
               value={filters.categoryId}
               onChange={(e) => handleChange('categoryId', e.target.value)}
               className="rounded border px-3 py-1.5 text-sm"
             >
-              <option value="">Sve</option>
+              <option value="">All</option>
               {categoryOptions.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.icon} {c.name}
@@ -104,7 +104,7 @@ function handleTypeChange(value: string) {
           </div>
 
           <div className="flex w-full flex-col gap-1 sm:w-auto">
-            <label className="text-xs text-muted-foreground">Od</label>
+            <label className="text-xs text-muted-foreground">From</label>
             <input
               type="date"
               value={filters.from}
@@ -114,7 +114,7 @@ function handleTypeChange(value: string) {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Do</label>
+            <label className="text-xs text-muted-foreground">To</label>
             <input
               type="date"
               value={filters.to}
@@ -128,7 +128,7 @@ function handleTypeChange(value: string) {
               onClick={() => { setFilters(EMPTY_FILTERS); setPage(1); }}
               className="rounded border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
             >
-              Očisti
+              Clear
             </button>
           )}
         </div>
@@ -136,13 +136,13 @@ function handleTypeChange(value: string) {
         {/* Lista */}
         {isLoading && <p className="text-muted-foreground">Loading...</p>}
 
-        {!isLoading && error && <p className="text-red-600">Greška: {error}</p>}
+        {!isLoading && error && <p className="text-red-600">Error: {error}</p>}
 
         {!isLoading && !error && transactions.length === 0 && (
           <div className="rounded border border-dashed p-8 text-center text-muted-foreground">
             {hasActiveFilters
-              ? 'Nema transakcija za izabrane filtere.'
-              : 'Nemate transakcije. Dodajte prvu.'}
+              ? 'No transactions match the selected filters.'
+              : 'No transactions yet. Add your first one.'}
           </div>
         )}
 
@@ -161,7 +161,7 @@ function handleTypeChange(value: string) {
                       <span className="text-2xl">{category?.icon ?? '❓'}</span>
                       <div>
                         <p className="font-medium">
-                          {category?.name ?? 'Nepoznata kategorija'}
+                          {category?.name ?? 'Unknown category'}
                         </p>
                         <p className="text-sm text-muted-foreground">{t.description}</p>
                       </div>
@@ -184,11 +184,11 @@ function handleTypeChange(value: string) {
       disabled={page <= 1}
       className="rounded border px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
     >
-      ‹ Prethodna
+      ‹ Prev
     </button>
 
     <span className="text-sm text-muted-foreground">
-      Strana {pagination.page}
+      Page {pagination.page}
     </span>
 
     <button
@@ -196,7 +196,7 @@ function handleTypeChange(value: string) {
       disabled={!pagination.hasMore}
       className="rounded border px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
     >
-      Sledeća ›
+      Next ›
     </button>
   </div>
 )}        

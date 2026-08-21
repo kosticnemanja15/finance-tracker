@@ -31,7 +31,7 @@ export function CategoryPieChart({ data }: Props) {
   if (data.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-8 text-center">
-        Nema rashoda za ovaj mesec.
+        No expenses for this month.
       </p>
     );
   }

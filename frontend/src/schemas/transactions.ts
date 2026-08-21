@@ -2,21 +2,21 @@ import { z } from 'zod';
 
 export const CreateTransactionSchema = z.object({
   type: z.enum(['income', 'expense'], {
-    message: 'Izaberi tip transakcije',
+    message: 'Choose transaction type',
   }),
   amount: z
-    .number({ message: 'Iznos mora biti broj' })
-    .positive('Iznos mora biti veći od 0'),
+    .number({ message: 'Amount must be a number' })
+    .positive('Amount must be greater than 0'),
   categoryId: z
-    .number({ message: 'Izaberi kategoriju' })
+    .number({ message: 'Choose category' })
     .int()
-    .positive('Izaberi kategoriju'),
+    .positive('Choose category'),
   description: z
     .string()
-    .min(1, 'Opis je obavezan')
-    .max(200, 'Opis je predugačak'),
+    .min(1, 'Description is required')
+    .max(200, 'Description is too long'),
   // YYYY-MM-DD — poklapa se sa <input type="date"> i backend z.string().date()
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Izaberi datum'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose date'),
 });
 
 // tip izveden iz šeme — jedan izvor istine (isti trik koji ćeš u Fazi 3 pojačati)

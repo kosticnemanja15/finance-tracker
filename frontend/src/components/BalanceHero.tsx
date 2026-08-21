@@ -46,11 +46,11 @@ export function BalanceHero({ stats, monthLabel }: Props) {
       {/* Prihod / rashod red — podređeni saldu */}
       <div className="flex gap-6 mt-3 font-sans text-sm">
         <span className="text-muted-foreground">
-          <span className="text-income">↑</span> prihod{" "}
+          <span className="text-income">↑</span> income{" "}
           <span className="tabular-nums">{formatRSD(totalIncome)}</span>
         </span>
         <span className="text-muted-foreground">
-          <span className="text-expense">↓</span> rashod{" "}
+          <span className="text-expense">↓</span> expense{" "}
           <span className="tabular-nums">{formatRSD(totalExpense)}</span>
         </span>
       </div>
@@ -64,7 +64,7 @@ export function BalanceHero({ stats, monthLabel }: Props) {
           />
         </div>
         <p className="font-sans text-xs text-muted-foreground mt-2 tabular-nums">
-          {Math.round(burnPercent)}% potrošeno
+          {Math.round(burnPercent)}% spent
         </p>
       </div>
     </div>

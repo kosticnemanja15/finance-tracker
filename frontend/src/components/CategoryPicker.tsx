@@ -36,7 +36,7 @@ export function CategoryPicker({
       className="w-full rounded border px-3 py-2 text-sm disabled:opacity-50"
     >
       <option value="">
-        {isLoading ? 'Učitavanje...' : 'Izaberi kategoriju'}
+        {isLoading ? 'Loading...' : 'Choose category'}
       </option>
       {options.map((c) => (
         <option key={c.id} value={c.id}>

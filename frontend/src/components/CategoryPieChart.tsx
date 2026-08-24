@@ -8,7 +8,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
-import { formatRSD } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import type { PieSlice } from "@/lib/chartData";
 
 type Props = {
@@ -53,7 +53,7 @@ export function CategoryPieChart({ data }: Props) {
             <Cell key={index} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
-        <Tooltip formatter={(value) => formatRSD(Number(value))} />
+        <Tooltip formatter={(value) => formatMoney(Number(value))} />
         <Legend />
       </PieChart>
     </ResponsiveContainer>

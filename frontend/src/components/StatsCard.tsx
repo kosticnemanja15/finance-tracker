@@ -1,4 +1,4 @@
-import { formatSignedRSD, formatRSD } from "@/lib/format";
+import { formatSignedMoney, formatMoney } from "@/lib/format";
 
 type Variant = "income" | "expense" | "balance";
 
@@ -23,7 +23,7 @@ export function StatsCard({ label, amount, variant }: StatsCardProps) {
   // Income/expense su uvek pozitivni brojevi (bez znaka) — smer nosi label/boja.
   // Balance dobija eksplicitan +/− jer znak JE informacija.
   const display =
-    variant === "balance" ? formatSignedRSD(amount) : formatRSD(amount);
+    variant === "balance" ? formatSignedMoney(amount) : formatMoney(amount);
 
   return (
     <div className="rounded-xl border border-border bg-card p-5">

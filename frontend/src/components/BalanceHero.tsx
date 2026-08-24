@@ -1,9 +1,10 @@
-import { formatRSD, formatSignedRSD } from "@/lib/format";
+import { formatMoney, formatSignedMoney } from "@/lib/format";
 import type { Stats } from "@/hooks/useStats";
+import { ArrowUp, ArrowDown } from "lucide-react";
 
 type Props = {
   stats: Stats;
-  monthLabel: string; // npr. "Avgust 2026"
+  monthLabel: string; // npr. "August 2026"
 };
 
 export function BalanceHero({ stats, monthLabel }: Props) {
@@ -11,61 +12,90 @@ export function BalanceHero({ stats, monthLabel }: Props) {
 
   // Saldo boja: signature iz design doc-a (teal plus / coral minus)
   const isPositive = balance >= 0;
-  const balanceColor = isPositive ? "text-income" : "text-expense";
+  const accentText = isPositive ? "text-income" : "text-expense";
+  const accentBg = isPositive ? "bg-income" : "bg-expense";
 
-  // Burn bar: koliko od prihoda je potrošeno.
-  // Guard protiv deljenja nulom.
+  // Burn bar: koliko od prihoda je potrošeno. Guard protiv deljenja nulom.
   let burnPercent: number;
   if (totalIncome > 0) {
     burnPercent = (totalExpense / totalIncome) * 100;
   } else {
-    // Nema prihoda: ako ima rashoda → pun bar (100%), inače prazan
     burnPercent = totalExpense > 0 ? 100 : 0;
   }
-
-  // Bar se ne puni preko 100% vizuelno (clamp), ali procenat u tekstu
-  // može da bude >100 (npr. "potrošio 140% prihoda")
-  const barWidth = Math.min(burnPercent, 100);
-
-  // Bar boja: ispod 100% trošiš manje nego što zaradiš (teal),
-  // 100%+ znači u minusu (coral)
-  const barColor = burnPercent >= 100 ? "bg-expense" : "bg-income";
+  const barWidth = Math.min(burnPercent, 100); // bar clamp na 100%, tekst može >100
+  const isOver = burnPercent > 100;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-8">
-      {/* Mesec */}
-      <p className="font-sans text-sm text-muted-foreground">{monthLabel}</p>
-
-      {/* OGROMAN saldo — signature */}
-      <p
-        className={`font-display text-5xl sm:text-6xl tabular-nums mt-2 ${balanceColor}`}
-      >
-        {formatSignedRSD(balance)}
-      </p>
-
-      {/* Prihod / rashod red — podređeni saldu */}
-      <div className="flex gap-6 mt-3 font-sans text-sm">
-        <span className="text-muted-foreground">
-          <span className="text-income">↑</span> income{" "}
-          <span className="tabular-nums">{formatRSD(totalIncome)}</span>
-        </span>
-        <span className="text-muted-foreground">
-          <span className="text-expense">↓</span> expense{" "}
-          <span className="tabular-nums">{formatRSD(totalExpense)}</span>
+    // text-ink na rootu = sidro protiv dark-mode nasleđene boje
+    <div className="rounded-card border border-line bg-surface text-ink shadow-hero p-8 sm:p-9">
+      {/* Mesec — samo label; izbor meseca je MonthYearPicker iznad */}
+      <div className="flex items-center justify-between">
+        <span className="inline-flex items-center rounded-full border border-line bg-surface-2 px-3.5 py-1.5 text-sm font-semibold">
+          {monthLabel}
         </span>
       </div>
 
+      {/* Balance label + OGROMAN saldo — signature */}
+      <p className="mt-6 text-sm font-medium text-ink-muted">Balance</p>
+      <p
+        className={`mt-1 font-display font-extrabold leading-none tabular-nums text-[clamp(42px,8vw,70px)] ${accentText}`}
+      >
+        {formatSignedMoney(balance)}
+      </p>
+      {/* accent linija — pojačava +/− signal (boja = boja salda) */}
+      <div className={`mt-4 h-[5px] w-[60px] rounded-full opacity-85 ${accentBg}`} />
+
+      {/* Prihod / rashod — podređeni saldu, sa tinted tile ikonicama */}
+      <div className="mt-5 mb-7 flex gap-7">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="grid h-[26px] w-[26px] place-items-center rounded-lg text-income"
+            style={{ backgroundColor: "color-mix(in srgb, var(--income) 15%, transparent)" }}
+          >
+            <ArrowUp size={15} strokeWidth={2.5} />
+          </span>
+          <div>
+            <div className="text-xs leading-tight text-ink-subtle">Income</div>
+            <div className="text-[15px] font-bold tabular-nums text-ink">
+              {formatMoney(totalIncome)}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <span
+            className="grid h-[26px] w-[26px] place-items-center rounded-lg text-expense"
+            style={{ backgroundColor: "color-mix(in srgb, var(--expense) 15%, transparent)" }}
+          >
+            <ArrowDown size={15} strokeWidth={2.5} />
+          </span>
+          <div>
+            <div className="text-xs leading-tight text-ink-subtle">Expenses</div>
+            <div className="text-[15px] font-bold tabular-nums text-ink">
+              {formatMoney(totalExpense)}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Burn bar */}
-      <div className="mt-6">
-        <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+      <div>
+        <div className="mb-2.5 flex items-baseline justify-between">
+          <span className="text-xs font-medium text-ink-muted">Spent this month</span>
+          <span
+            className={`text-[13px] font-bold tabular-nums ${isOver ? "text-expense" : "text-ink"}`}
+          >
+            {Math.round(burnPercent)}%
+            <span className="ml-0.5 font-medium text-ink-subtle">
+              {isOver ? "over budget" : "spent"}
+            </span>
+          </span>
+        </div>
+        <div className="h-2.5 w-full overflow-hidden rounded-full border border-line bg-surface-2">
           <div
-            className={`h-full rounded-full transition-all ${barColor}`}
+            className="h-full rounded-full bg-expense transition-all duration-700"
             style={{ width: `${barWidth}%` }}
           />
         </div>
-        <p className="font-sans text-xs text-muted-foreground mt-2 tabular-nums">
-          {Math.round(burnPercent)}% spent
-        </p>
       </div>
     </div>
   );

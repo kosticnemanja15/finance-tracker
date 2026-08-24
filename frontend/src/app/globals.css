@@ -2,25 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
-}
-
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
 }
+
+/* ===== shadcn tokeni (oklch) — NE DIRAJ, komponente zavise od ovoga ===== */
 @layer base {
   :root {
     --background: oklch(1 0 0);
@@ -90,11 +78,37 @@
     --sidebar-ring: oklch(0.553 0.013 58.071);
   }
 }
+
+/* ===== Finance Tracker design tokeni (Day 20.5) — imena ne gaze shadcn ===== */
+:root {
+  --bg:#FBF9F7; --surface:#FFFDFB; --surface-2:#F6F2EF; --line:#EDE7E2;
+  --ink:#1A1625; --ink-muted:#6C6577; --ink-subtle:#9A93A3;
+  --brand:#FF5A5F; --income:#0FA47F; --expense:#E8524E;
+  --c-housing:#FF5A5F; --c-food:#F2955A; --c-sub:#E8B04B;
+  --c-transport:#A472C6; --c-shopping:#E0699A; --c-other:#9B7FA8;
+  --shadow-sm:0 1px 2px rgba(26,21,34,.05);
+  --shadow-md:0 2px 4px rgba(26,21,34,.04), 0 10px 26px -8px rgba(26,21,34,.12);
+  --shadow-lg:0 4px 8px rgba(26,21,34,.05), 0 20px 44px -10px rgba(26,21,34,.16);
+  --focus:0 0 0 3px rgba(255,90,95,.34);
+}
+.dark {
+  --bg:#1A1522; --surface:#241E30; --surface-2:#2C2539; --line:#352C44;
+  --ink:#F4F0F7; --ink-muted:#ABA1B8; --ink-subtle:#766D82;
+  --brand:#FF6266; --income:#1CC194; --expense:#FF6B67;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 2px 6px rgba(0,0,0,.35), 0 12px 30px -10px rgba(0,0,0,.55);
+  --shadow-lg:0 4px 10px rgba(0,0,0,.4), 0 24px 50px -12px rgba(0,0,0,.6);
+  --focus:0 0 0 3px rgba(255,98,102,.4);
+}
+
+/* ===== Base — page nosi warm bg + warm hairline default ===== */
 @layer base {
   * {
-    @apply border-border;
+    border-color: var(--line);
   }
   body {
-    @apply bg-background text-foreground;
+    background: var(--bg);
+    color: var(--ink);
+    transition: background-color .25s ease, color .25s ease;
   }
 }

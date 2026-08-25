@@ -13,8 +13,17 @@ interface TransactionFormProps {
   onSubmit: (data: CreateTransactionInput) => Promise<void>;
   submitLabel: string;
   onCancel: () => void;
-  extraActions?: React.ReactNode; // slot za delete (edit-only)
+  extraActions?: React.ReactNode;
 }
+
+// Zajednički stil za text/number/date input-e
+const inputClass =
+  "w-full rounded-btn border border-line bg-surface text-ink px-3 py-2 text-sm " +
+  "transition-colors focus:outline-none focus-visible:shadow-[var(--focus)] " +
+  "placeholder:text-ink-subtle";
+
+const labelClass = "text-sm font-medium text-ink";
+const errorClass = "text-sm text-expense";
 
 export function TransactionForm({
   defaultValues,
@@ -36,7 +45,7 @@ export function TransactionForm({
       type: 'expense',
       description: '',
       date: new Date().toISOString().slice(0, 10),
-      ...defaultValues, // parent-ove vrednosti pregaze default-e (edit slučaj)
+      ...defaultValues,
     },
   });
 
@@ -44,38 +53,41 @@ export function TransactionForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {/* TYPE */}
+      {/* TYPE — aktivni tip nosi svoju boju (coral/teal), ne crnu */}
       <Controller
         control={control}
         name="type"
         render={({ field }) => (
           <div className="flex gap-2">
-            {(['expense', 'income'] as const).map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => {
-                  field.onChange(opt);
-                  setValue('categoryId', undefined as never);
-                }}
-                className={`flex-1 rounded border px-4 py-2 text-sm ${
-                  field.value === opt
-                    ? 'border-black bg-black text-white'
-                    : 'border-input'
-                }`}
-              >
-                {opt === 'expense' ? 'Expense' : 'Income'}
-              </button>
-            ))}
+            {(['expense', 'income'] as const).map((opt) => {
+              const active = field.value === opt;
+              const activeStyle =
+                opt === 'expense'
+                  ? 'border-expense bg-expense text-white'
+                  : 'border-income bg-income text-white';
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => {
+                    field.onChange(opt);
+                    setValue('categoryId', undefined as never);
+                  }}
+                  className={`flex-1 rounded-btn border px-4 py-2 text-sm font-medium transition-colors ${
+                    active ? activeStyle : 'border-line text-ink-muted hover:bg-surface-2'
+                  }`}
+                >
+                  {opt === 'expense' ? 'Expense' : 'Income'}
+                </button>
+              );
+            })}
           </div>
         )}
       />
 
       {/* CATEGORY */}
       <div className="space-y-1">
-        <label htmlFor="categoryId" className="text-sm font-medium">
-          Category
-        </label>
+        <label htmlFor="categoryId" className={labelClass}>Category</label>
         <Controller
           control={control}
           name="categoryId"
@@ -89,73 +101,66 @@ export function TransactionForm({
           )}
         />
         {errors.categoryId && (
-          <p className="text-sm text-red-600">{errors.categoryId.message}</p>
+          <p className={errorClass}>{errors.categoryId.message}</p>
         )}
       </div>
 
       {/* AMOUNT */}
       <div className="space-y-1">
-        <label htmlFor="amount" className="text-sm font-medium">
-          Amount
-        </label>
+        <label htmlFor="amount" className={labelClass}>Amount</label>
         <input
           id="amount"
           type="number"
           step="0.01"
           {...register('amount', { valueAsNumber: true })}
-          className="w-full rounded border px-3 py-2 text-sm"
+          className={`${inputClass} tabular-nums`}
         />
-        {errors.amount && (
-          <p className="text-sm text-red-600">{errors.amount.message}</p>
-        )}
+        {errors.amount && <p className={errorClass}>{errors.amount.message}</p>}
       </div>
 
       {/* DESCRIPTION */}
       <div className="space-y-1">
-        <label htmlFor="description" className="text-sm font-medium">
-          Description
-        </label>
+        <label htmlFor="description" className={labelClass}>Description</label>
         <input
           id="description"
           type="text"
           {...register('description')}
-          className="w-full rounded border px-3 py-2 text-sm"
+          className={inputClass}
         />
         {errors.description && (
-          <p className="text-sm text-red-600">{errors.description.message}</p>
+          <p className={errorClass}>{errors.description.message}</p>
         )}
       </div>
 
       {/* DATE */}
       <div className="space-y-1">
-        <label htmlFor="date" className="text-sm font-medium">
-          Date
-        </label>
+        <label htmlFor="date" className={labelClass}>Date</label>
         <input
           id="date"
           type="date"
           {...register('date')}
-          className="w-full rounded border px-3 py-2 text-sm"
+          className={inputClass}
         />
-        {errors.date && (
-          <p className="text-sm text-red-600">{errors.date.message}</p>
-        )}
+        {errors.date && <p className={errorClass}>{errors.date.message}</p>}
       </div>
 
-      {/* AKCIJE — submit + cancel levo, extraActions (delete) desno */}
+      {/* AKCIJE */}
       <div className="flex items-center justify-between pt-2">
         <div className="flex gap-2">
           <button
             type="submit"
             disabled={isSubmitting}
-            className="rounded bg-black px-4 py-2 text-sm text-white hover:bg-black/80 disabled:opacity-50"
+            className="rounded-btn bg-brand px-4 py-2 text-sm font-medium text-white
+                       transition-colors hover:opacity-90 disabled:opacity-50
+                       focus-visible:outline-none focus-visible:shadow-[var(--focus)]"
           >
             {isSubmitting ? 'Saving...' : submitLabel}
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="rounded border px-4 py-2 text-sm hover:bg-muted"
+            className="rounded-btn border border-line px-4 py-2 text-sm font-medium text-ink
+                       transition-colors hover:bg-surface-2"
           >
             Cancel
           </button>

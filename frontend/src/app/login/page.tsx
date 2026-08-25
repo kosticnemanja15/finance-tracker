@@ -1,6 +1,6 @@
-"use client";  // Forma, hooks, event handleri = client component. Bez ovoga puca.
+"use client";
 
-import { useState , useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -8,106 +8,82 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
 import { LoginSchema, type LoginInput } from "@/schemas/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
-
+const inputClass =
+  "w-full rounded-btn border border-line bg-surface text-ink px-3 py-2 text-sm " +
+  "transition-colors focus:outline-none focus-visible:shadow-[var(--focus)] " +
+  "placeholder:text-ink-subtle";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, user, isLoading } = useAuth();
-
-  // formError = greška sa BACKENDA (401 pogrešna lozinka), odvojeno od
-  // field grešaka (validacija). RHF handluje field greške sam.
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Ulogovan korisnik nema šta da traži na login stranici → dashboard.
   useEffect(() => {
-    if (!isLoading && user) {
-      router.replace("/dashboard");
-    }
+    if (!isLoading && user) router.replace("/dashboard");
   }, [isLoading, user, router]);
 
   const {
-    register,            // veže input za RHF
-    handleSubmit,        // wrapper koji prvo validira, pa zove našu funkciju
-    formState: { errors, isSubmitting },  // errors = Zod poruke, isSubmitting = loading
-  } = useForm<LoginInput>({
-    resolver: zodResolver(LoginSchema),  // spaja Zod sa RHF
-  });
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginInput>({ resolver: zodResolver(LoginSchema) });
 
-  // onSubmit se zove SAMO ako Zod validacija prođe.
   async function onSubmit(data: LoginInput) {
-    setFormError(null);  // očisti prethodnu grešku
+    setFormError(null);
     try {
-      // login() iz konteksta: poziva backend, snima token, redirect na /dashboard.
       await login(data.email, data.password);
-      // Ako uspe, AuthContext već radi router.push("/dashboard") — mi ne radimo ništa.
     } catch (err) {
-      // login baci ApiError na 401. Hvatamo i prikazujemo poruku.
-      if (err instanceof ApiError) {
-        setFormError(err.message);  // "Invalid email or password" sa backenda
-      } else {
-        setFormError("Something went wrong. Please try again.");
-      }
+      if (err instanceof ApiError) setFormError(err.message);
+      else setFormError("Something went wrong. Please try again.");
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold">Welcome back</h1>
-          <p className="text-sm text-muted-foreground">Sign in to your account</p>
+        {/* Brand mark — identitet na auth stranama (nema NavBar ovde) */}
+        <div className="flex items-center justify-center gap-2 font-bold text-ink">
+          <span className="h-3 w-3 rounded-full bg-brand" />
+          Finance Tracker
         </div>
 
-        {/* noValidate = isključi browser validaciju, koristimo Zod */}
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-          {/* Email */}
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              {...register("email")}  // veže input za RHF polje "email"
-            />
-            {/* Field greška iz Zod-a */}
-            {errors.email && (
-              <p className="text-sm text-destructive">{errors.email.message}</p>
-            )}
+        <div className="rounded-card border border-line bg-surface p-7 shadow-card">
+          <div className="mb-6 space-y-1 text-center">
+            <h1 className="font-display text-2xl font-bold text-ink">Welcome back</h1>
+            <p className="text-sm text-ink-muted">Sign in to your account</p>
           </div>
 
-          {/* Password */}
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              {...register("password")}
-            />
-            {errors.password && (
-              <p className="text-sm text-destructive">{errors.password.message}</p>
-            )}
-          </div>
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="text-sm font-medium text-ink">Email</label>
+              <input id="email" type="email" placeholder="you@example.com" {...register("email")} className={inputClass} />
+              {errors.email && <p className="text-sm text-expense">{errors.email.message}</p>}
+            </div>
 
-          {/* Backend greška (401 itd.) — odvojeno od field grešaka */}
-          {formError && (
-            <p className="text-sm text-destructive text-center">{formError}</p>
-          )}
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="text-sm font-medium text-ink">Password</label>
+              <input id="password" type="password" {...register("password")} className={inputClass} />
+              {errors.password && <p className="text-sm text-expense">{errors.password.message}</p>}
+            </div>
 
-          {/* disabled dok traje submit → sprečava dupli klik */}
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "Signing in..." : "Sign in"}
-          </Button>
-        </form>
+            {formError && <p className="text-center text-sm text-expense">{formError}</p>}
 
-        <p className="text-sm text-center text-muted-foreground">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full rounded-btn bg-brand px-4 py-2.5 text-sm font-medium text-white
+                         transition-colors hover:opacity-90 disabled:opacity-50
+                         focus-visible:outline-none focus-visible:shadow-[var(--focus)]"
+            >
+              {isSubmitting ? "Signing in..." : "Sign in"}
+            </button>
+          </form>
+        </div>
+
+        <p className="text-center text-sm text-ink-muted">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-foreground underline">
-            Sign up
-          </Link>
+          <Link href="/register" className="font-medium text-brand hover:underline">Sign up</Link>
         </p>
       </div>
     </div>

@@ -3,11 +3,11 @@
 import { useCategories } from '@/context/CategoriesContext';
 
 interface CategoryPickerProps {
-  value: number | undefined;                    // izabrani categoryId (RHF drži broj)
+  value: number | undefined;
   onChange: (categoryId: number | undefined) => void;
-  type?: 'income' | 'expense';                  // filtrira opcije po tipu
+  type?: 'income' | 'expense';
   disabled?: boolean;
-  id?: string;                                  // za <label htmlFor>
+  id?: string;
 }
 
 export function CategoryPicker({
@@ -19,21 +19,20 @@ export function CategoryPicker({
 }: CategoryPickerProps) {
   const { categories, isLoading } = useCategories();
 
-  // ako je tip zadat, pokaži samo te kategorije (rashod-forma → rashod-kategorije)
   const options = type ? categories.filter((c) => c.type === type) : categories;
 
   return (
     <select
       id={id}
-      // select value je uvek string; '' kad ništa nije izabrano
       value={value ?? ''}
       disabled={disabled || isLoading}
       onChange={(e) => {
         const v = e.target.value;
-        // '' → undefined (ništa), inače string → number za backend
         onChange(v === '' ? undefined : Number(v));
       }}
-      className="w-full rounded border px-3 py-2 text-sm disabled:opacity-50"
+      className="w-full rounded-btn border border-line bg-surface text-ink px-3 py-2 text-sm
+                 transition-colors hover:bg-surface-2 focus:outline-none
+                 focus-visible:shadow-[var(--focus)] disabled:opacity-50"
     >
       <option value="">
         {isLoading ? 'Loading...' : 'Choose category'}

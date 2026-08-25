@@ -8,113 +8,87 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
 import { RegisterSchema, type RegisterInput } from "@/schemas/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
+const inputClass =
+  "w-full rounded-btn border border-line bg-surface text-ink px-3 py-2 text-sm " +
+  "transition-colors focus:outline-none focus-visible:shadow-[var(--focus)] " +
+  "placeholder:text-ink-subtle";
 
 export default function RegisterPage() {
-    const router = useRouter();
+  const router = useRouter();
   const { register: registerUser, user, isLoading } = useAuth();
-  // ^ preimenujemo: RHF-ov "register" i naš auth "register" bi se sudarili.
-
   const [formError, setFormError] = useState<string | null>(null);
 
-    // Ulogovan korisnik nema šta da traži na login stranici → dashboard.
   useEffect(() => {
-    if (!isLoading && user) {
-      router.replace("/dashboard");
-    }
+    if (!isLoading && user) router.replace("/dashboard");
   }, [isLoading, user, router]);
-  // ─────────────────
-  
+
   const {
-    register,            // RHF register (veže input)
+    register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<RegisterInput>({
-    resolver: zodResolver(RegisterSchema),
-  });
+  } = useForm<RegisterInput>({ resolver: zodResolver(RegisterSchema) });
 
   async function onSubmit(data: RegisterInput) {
     setFormError(null);
     try {
-      // auth register: kreira nalog, auto-login, redirect na /dashboard.
       await registerUser(data.name, data.email, data.password);
     } catch (err) {
-      if (err instanceof ApiError) {
-        // 409 EMAIL_EXISTS → "Email already registered" sa backenda
-        setFormError(err.message);
-      } else {
-        setFormError("Something went wrong. Please try again.");
-      }
+      if (err instanceof ApiError) setFormError(err.message);
+      else setFormError("Something went wrong. Please try again.");
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold">Create account</h1>
-          <p className="text-sm text-muted-foreground">Start tracking your finances</p>
+        <div className="flex items-center justify-center gap-2 font-bold text-ink">
+          <span className="h-3 w-3 rounded-full bg-brand" />
+          Finance Tracker
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-          {/* Name — novo polje vs login */}
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="Your name"
-              {...register("name")}
-            />
-            {errors.name && (
-              <p className="text-sm text-destructive">{errors.name.message}</p>
-            )}
+        <div className="rounded-card border border-line bg-surface p-7 shadow-card">
+          <div className="mb-6 space-y-1 text-center">
+            <h1 className="font-display text-2xl font-bold text-ink">Create account</h1>
+            <p className="text-sm text-ink-muted">Start tracking your finances</p>
           </div>
 
-          {/* Email */}
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              {...register("email")}
-            />
-            {errors.email && (
-              <p className="text-sm text-destructive">{errors.email.message}</p>
-            )}
-          </div>
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="name" className="text-sm font-medium text-ink">Name</label>
+              <input id="name" type="text" placeholder="Your name" {...register("name")} className={inputClass} />
+              {errors.name && <p className="text-sm text-expense">{errors.name.message}</p>}
+            </div>
 
-          {/* Password */}
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="At least 8 characters"
-              {...register("password")}
-            />
-            {errors.password && (
-              <p className="text-sm text-destructive">{errors.password.message}</p>
-            )}
-          </div>
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="text-sm font-medium text-ink">Email</label>
+              <input id="email" type="email" placeholder="you@example.com" {...register("email")} className={inputClass} />
+              {errors.email && <p className="text-sm text-expense">{errors.email.message}</p>}
+            </div>
 
-          {formError && (
-            <p className="text-sm text-destructive text-center">{formError}</p>
-          )}
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="text-sm font-medium text-ink">Password</label>
+              <input id="password" type="password" placeholder="At least 8 characters" {...register("password")} className={inputClass} />
+              {errors.password && <p className="text-sm text-expense">{errors.password.message}</p>}
+            </div>
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "Creating account..." : "Create account"}
-          </Button>
-        </form>
+            {formError && <p className="text-center text-sm text-expense">{formError}</p>}
 
-        <p className="text-sm text-center text-muted-foreground">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full rounded-btn bg-brand px-4 py-2.5 text-sm font-medium text-white
+                         transition-colors hover:opacity-90 disabled:opacity-50
+                         focus-visible:outline-none focus-visible:shadow-[var(--focus)]"
+            >
+              {isSubmitting ? "Creating account..." : "Create account"}
+            </button>
+          </form>
+        </div>
+
+        <p className="text-center text-sm text-ink-muted">
           Already have an account?{" "}
-          <Link href="/login" className="text-foreground underline">
-            Sign in
-          </Link>
+          <Link href="/login" className="font-medium text-brand hover:underline">Sign in</Link>
         </p>
       </div>
     </div>

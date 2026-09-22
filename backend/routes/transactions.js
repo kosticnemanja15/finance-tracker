@@ -1,7 +1,9 @@
 // routes/transactions.js
 import { Router } from 'express';
-import { transactions, getNextId } from '../data/transactions.js';
-import { categories } from '../data/categories.js';
+import prisma from '../lib/prisma.js';
+import { serializeTransaction, serializeTransactions } from '../utils/serialize.js';
+// PRIVREMENO još potrebni za /:id, POST, PATCH, DELETE (migriramo ih u Koraku 4):
+
 import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -17,25 +19,26 @@ import {
 const router = Router();
 
 /**
- * Cross-resource validacija: proverava da je kategorija
- * (1) postojeća, (2) vidljiva useru, (3) istog tipa kao transakcija.
- * Baca odgovarajuću grešku ili vraća kategoriju ako je sve OK.
+ * Cross-resource validacija kategorije — sada čita iz baze.
+ * (1) postoji, (2) pripada useru, (3) tip se poklapa sa transakcijom.
+ * async je jer radi DB upit.
  */
-function assertCategoryUsable(categoryId, transactionType, user) {
-  const category = categories.find(c => c.id === categoryId);
+async function assertCategoryUsable(categoryId, transactionType, user) {
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId },
+  });
 
   // 1. Postoji?
   if (!category) {
     throw new BadRequestError('CATEGORY_NOT_FOUND', 'Category does not exist');
   }
 
-  // 2. Vidljiva useru? (default ILI njegova privatna)
-  const isVisible = category.isDefault || category.userId === user.id;
-  if (!isVisible) {
+  // 2. Pripada useru? (A1: nema više isDefault — svaka kategorija ima vlasnika)
+  if (category.userId !== user.id) {
     throw new ForbiddenError('Category not accessible');
   }
 
-  // 3. Tip se poklapa? (odluka: strogo)
+  // 3. Tip se poklapa?
   if (category.type !== transactionType) {
     throw new BadRequestError(
       'CATEGORY_TYPE_MISMATCH',
@@ -46,195 +49,249 @@ function assertCategoryUsable(categoryId, transactionType, user) {
   return category;
 }
 
-// GET /transactions → moje transakcije (admin vidi sve)
+// ─────────────────────────────────────────────────────────────
+// GET /transactions → moje (admin sve) + filteri + pagination  [MIGRIRANO — Korak 2 v2]
+// ─────────────────────────────────────────────────────────────
 router.get('/',
   requireAuth,
   validateQuery(TransactionsQuerySchema),
   asyncHandler(async (req, res) => {
+    const { type, categoryId, from, to, page, limit } = req.validatedQuery;
 
-    let result = req.user.role === 'admin'
-      ? transactions
-      : transactions.filter(t => t.userId === req.user.id);
+    // Ownership je osnova where-a: admin {} (sve), user { userId }.
+    const where = req.user.role === 'admin'
+      ? {}
+      : { userId: req.user.id };
 
-    const{type,categoryId,from,to,page,limit} = req.validatedQuery;
+    // Filteri — svaki dodaje ključ SAMO ako je poslat.
+    if (type) {
+      where.category = { type };   // type je na kategoriji → filter kroz relaciju
+    }
+    if (categoryId) {
+      where.categoryId = categoryId;
+    }
 
-     if(type){
-        result = result.filter(t => t.type === type);
-     } 
-     if(categoryId){
-        result = result.filter(t => t.categoryId === categoryId);
-     }
-     if(from){
-        result = result.filter(t => t.date >= from);
-     }
-      if(to){
-        result = result.filter(t => t.date <= to);
-     }
+    // Datum opseg — from/to su stringovi, Prisma hoće Date + gte/lte.
+    if (from || to) {
+      where.date = {};
+      if (from) where.date.gte = new Date(from);
+      if (to)   where.date.lte = new Date(to);
+    }
 
-    // Paginacija (ako je već želiš iskoristiti)
-    const total = result.length;
-    const start = (page - 1) * limit;
-    const end = start + limit;
+    // Pagination
+    const skip = (page - 1) * limit;
 
-    const data = result.slice(start,end);
-    const hasMore = end < total;
+    // Dva upita paralelno: strana podataka + total (isti where!).
+    const [data, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        include: { category: true },   // anti-N+1
+        orderBy: { date: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    const hasMore = skip + data.length < total;
 
     res.json({
-        data,
-        pagination: {page,total,hasMore}
+      data: serializeTransactions(data),
+      pagination: { page, total, hasMore },
     });
   })
 );
 
-router.get('/stats', 
-    requireAuth,
-    validateQuery(StatsQuerySchema),
-    asyncHandler(async(req,res) => {
-      const{year,month} = req.validatedQuery;
+// ─────────────────────────────────────────────────────────────
+// GET /transactions/stats  [IN-MEMORY — migrira se u Koraku 6]
+// ─────────────────────────────────────────────────────────────
+router.get('/stats',
+  requireAuth,
+  validateQuery(StatsQuerySchema),
+  asyncHandler(async (req, res) => {
+    const { year, month } = req.validatedQuery;
 
-     
-      let result = transactions.filter(t => t.userId === req.user.id);
+    // 1. Bazni where: samo moje transakcije (stats je uvek lični, ne admin-sve)
+    const where = { userId: req.user.id };
 
+    // 2. Datumski filter — year/month postaju opseg [from, to).
+    //    Umesto starog date.startsWith trika: pravi DateTime opseg.
+    if (year) {
+      const from = new Date(Date.UTC(year, month ? month - 1 : 0, 1));
+      const to = month
+        ? new Date(Date.UTC(year, month, 1))        // prvi dan sledećeg meseca
+        : new Date(Date.UTC(year + 1, 0, 1));       // prvi dan sledeće godine
+      where.date = { gte: from, lt: to };           // lt (ne lte) — do početka sledećeg perioda
+    }
 
-      if (year) {
-        let prefix = String(year);
-        if (month) {
-          prefix = `${year}-${String(month).padStart(2,'0')}`;
-        }
-        result = result.filter(t => t.date.startsWith(prefix));
-      }
+    // 3. Suma po kategoriji — groupBy radi GROUP BY u bazi.
+    const grouped = await prisma.transaction.groupBy({
+      by: ['categoryId'],
+      where,
+      _sum: { amount: true },
+    });
 
-      // 3. Total income / expense — prođi JEDNOM kroz result
-      //    hint: reduce ili for...of, akumuliraj dve sume
-      let totalIncome = 0;
-      let totalExpense = 0;
-     
-      for(const transaction of result){
-        if(transaction.type === 'income'){
-          totalIncome += transaction.amount;
-        } else {
-          totalExpense += transaction.amount;
-        }
-      }
+    // 4. Treba nam ime + tip svake kategorije (groupBy vraća samo categoryId + sumu).
+    //    Jedan upit za sve kategorije iz rezultata (anti-N+1, IN lista).
+    const categoryIds = grouped.map(g => g.categoryId);
+    const categories = await prisma.category.findMany({
+      where: { id: { in: categoryIds } },
+    });
+    const catMap = new Map(categories.map(c => [c.id, c]));
 
-      // 4. balance
-      const balance = totalIncome - totalExpense;
+    // 5. Sastavi byCategory + izračunaj totale iz istih podataka.
+    let totalIncome = 0;
+    let totalExpense = 0;
+    const byCategory = grouped.map(g => {
+      const category = catMap.get(g.categoryId);
+      const total = g._sum.amount ? g._sum.amount.toNumber() : 0;   // Decimal→number
 
-      // 5. Grupiši po kategoriji
-      const byCategoryMap = new Map();
+      // tip se izvodi iz kategorije → tako znamo income vs expense
+      if (category?.type === 'income') totalIncome += total;
+      else totalExpense += total;
 
-      for (const t of result) {
-        const current = byCategoryMap.get(t.categoryId) ?? 0;  // postojeća suma ili 0
-        byCategoryMap.set(t.categoryId, current + t.amount);
-      }
+      return {
+        categoryId: g.categoryId,
+        categoryName: category ? category.name : 'Unknown',
+        total,
+      };
+    });
 
-      // 6. Pretvori Map u niz + dodaj categoryName (lookup u categories)
-      const byCategory = [];
-      for (const [categoryId, total] of byCategoryMap) {
-        const category = categories.find(c => c.id === categoryId);
-        byCategory.push({
-          categoryId,
-          categoryName: category ? category.name : 'Unknown',  // guard ako je kategorija obrisana
-          total,
-        });
-      }
+    const balance = totalIncome - totalExpense;
 
-      res.json({ totalIncome, totalExpense, balance, byCategory });
-    })
+    res.json({ totalIncome, totalExpense, balance, byCategory });
+  })
 );
 
-// GET /transactions/:id → jedna (moja ili admin)
+// ─────────────────────────────────────────────────────────────
+// GET /transactions/:id  [IN-MEMORY — migrira se u Koraku 4]
+// ─────────────────────────────────────────────────────────────
 router.get('/:id',
   requireAuth,
   validateParams(TransactionIdParamSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
-    const transaction = transactions.find(t => t.id === id);
+
+    const transaction = await prisma.transaction.findUnique({
+      where: { id },
+      include: { category: true },
+    });
 
     if (!transaction) throw new NotFoundError('Transaction not found');
 
-    // Ownership (admin override)
+    // Ownership (admin override) — ista logika, radi na objektu iz baze
     const isSelf = transaction.userId === req.user.id;
     const isAdmin = req.user.role === 'admin';
     if (!isSelf && !isAdmin) throw new ForbiddenError('Access denied');
 
-    res.json(transaction);
+    res.json(serializeTransaction(transaction));   // Decimal→number, jednina
   })
 );
 
-// POST /transactions → kreiraj moju
+// ─────────────────────────────────────────────────────────────
+// POST /transactions  [IN-MEMORY — migrira se u Koraku 4]
+// ─────────────────────────────────────────────────────────────
 router.post('/',
   requireAuth,
   validateBody(CreateTransactionSchema),
   asyncHandler(async (req, res) => {
     const { type, amount, categoryId, description, date } = req.body;
 
-    // Cross-resource validacija kategorije
-    assertCategoryUsable(categoryId, type, req.user);
+    // Validacija kategorije iz baze (await jer je sad async)
+    await assertCategoryUsable(categoryId, type, req.user);
 
-    const newTransaction = {
-      id: getNextId(),
-      userId: req.user.id,        // ownership — server postavlja, ne klijent
-      type,
-      amount,
-      categoryId,
-      description,
-      date,
-      createdAt: new Date().toISOString(),
-    };
+    const transaction = await prisma.transaction.create({
+      data: {
+        userId: req.user.id,           // ownership — server postavlja, NE klijent
+        amount,                        // Prisma prima number/string za Decimal
+        description,
+        date: new Date(date),          // string "YYYY-MM-DD" → Date za DateTime kolonu
+        categoryId,
+        // NAPOMENA: nema `type` — Transaction nema tu kolonu (izvodi se iz kategorije)
+        // NAPOMENA: nema `id`/`createdAt` — baza ih daje (autoincrement / default now())
+      },
+      include: { category: true },     // vrati sa kategorijom, kao GET
+    });
 
-    transactions.push(newTransaction);
-    res.status(201).json(newTransaction);
+    res.status(201).json(serializeTransaction(transaction));
   })
 );
 
-// PATCH /transactions/:id → ažuriraj moju
+// ─────────────────────────────────────────────────────────────
+// PATCH /transactions/:id  [IN-MEMORY — migrira se u Koraku 4]
+// ─────────────────────────────────────────────────────────────
 router.patch('/:id',
   requireAuth,
   validateParams(TransactionIdParamSchema),
   validateBody(UpdateTransactionSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
-    const transaction = transactions.find(t => t.id === id);
 
-    if (!transaction) throw new NotFoundError('Transaction not found');
+    // 1. Nađi postojeću (treba nam za ownership + fallback vrednosti validacije)
+    const existing = await prisma.transaction.findUnique({
+      where: { id },
+      include: { category: true },
+    });
 
-    // Ownership (admin override)
-    const isSelf = transaction.userId === req.user.id;
+    if (!existing) throw new NotFoundError('Transaction not found');
+
+    // 2. Ownership (admin override)
+    const isSelf = existing.userId === req.user.id;
     const isAdmin = req.user.role === 'admin';
     if (!isSelf && !isAdmin) throw new ForbiddenError('Access denied');
 
-    // Ako se menja type ILI categoryId, ponovo validiraj kategoriju.
-    // Koristimo NOVE vrednosti ako su poslate, inače postojeće.
-    if (req.body.type !== undefined || req.body.categoryId !== undefined) {
-      const nextType = req.body.type ?? transaction.type;
-      const nextCategoryId = req.body.categoryId ?? transaction.categoryId;
-      assertCategoryUsable(nextCategoryId, nextType, req.user);
+    // 3. Ako se menja categoryId, re-validiraj.
+    //    type NIJE u body-ju (Transaction ga nema) → izvedi ga iz kategorije:
+    //    ako se menja categoryId, novi tip je tip NOVE kategorije; validacija to hvata.
+    if (req.body.categoryId !== undefined) {
+      // tip protiv kog validiramo = tip postojeće kategorije transakcije
+      // (jer transakcija "je" income/expense preko svoje kategorije)
+      const nextType = existing.category.type;
+      await assertCategoryUsable(req.body.categoryId, nextType, req.user);
     }
 
-    Object.assign(transaction, req.body);
-    res.json(transaction);
+    // 4. Update — samo poslata polja (Zod već očistio body).
+    //    date treba konverziju ako je poslat.
+    const data = { ...req.body };
+    if (data.date !== undefined) {
+      data.date = new Date(data.date);
+    }
+
+    const updated = await prisma.transaction.update({
+      where: { id },
+      data,
+      include: { category: true },
+    });
+
+    res.json(serializeTransaction(updated));
   })
 );
 
-// DELETE /transactions/:id → obriši moju
+// ─────────────────────────────────────────────────────────────
+// DELETE /transactions/:id  [IN-MEMORY — migrira se u Koraku 4]
+// ─────────────────────────────────────────────────────────────
 router.delete('/:id',
   requireAuth,
   validateParams(TransactionIdParamSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
-    const index = transactions.findIndex(t => t.id === id);
 
-    if (index === -1) throw new NotFoundError('Transaction not found');
+    // Nađi prvo — za ownership proveru (i da razlikujemo 404 od 403)
+    const existing = await prisma.transaction.findUnique({
+      where: { id },
+    });
 
-    // Ownership (admin override)
-    const transaction = transactions[index];
-    const isSelf = transaction.userId === req.user.id;
+    if (!existing) throw new NotFoundError('Transaction not found');
+
+    const isSelf = existing.userId === req.user.id;
     const isAdmin = req.user.role === 'admin';
     if (!isSelf && !isAdmin) throw new ForbiddenError('Access denied');
 
-    transactions.splice(index, 1);
-    res.status(204).end();
+    await prisma.transaction.delete({
+      where: { id },
+    });
+
+    res.status(204).end();   // 204 No Content — nema tela u odgovoru
   })
 );
 

@@ -11,6 +11,11 @@ import { UnauthorizedError, ForbiddenError , ConflictError } from '../errors/Api
 import { requireAuth } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 
+// Timing-attack zaštita: VALIDAN bcrypt hash (60 karaktera) sa ISTIM cost-om
+// kao pravi hash-evi. Računa se jednom, pri učitavanju modula.
+// Kad user ne postoji, poredimo sa ovim — bcrypt odradi pun broj rundi,
+// pa odgovor traje isto kao za postojeći email.
+const DUMMY_HASH = bcrypt.hashSync('timing-attack-dummy-password', config.bcrypt.cost);
 
 const router = Router();
 
@@ -67,11 +72,10 @@ router.post('/login',
     // 1. Nađi user-a
     const user = users.find(u => u.email === email);
 
-    // 2. Timing attack protection — UVEK pozovi bcrypt.compare,
-    //    čak i kad user ne postoji (dummy hash), da vreme odgovora bude isto
-    const validPassword = user
-      ? await bcrypt.compare(password, user.password_hash)
-      : await bcrypt.compare(password, '$2b$10$dummy.hash.for.timing.consistency.fake');
+    // 2. Timing attack protection — UVEK jedan bcrypt.compare sa validnim hash-om.
+    //    Nepostojeći user → DUMMY_HASH (isti cost, isto trajanje).
+    const hashToCompare = user ? user.password_hash : DUMMY_HASH;
+    const validPassword = await bcrypt.compare(password, hashToCompare);
 
     // 3. Generička greška — ne otkrivaj DA LI je email ili password pogrešan
     if (!user || !validPassword) {

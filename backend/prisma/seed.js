@@ -2,24 +2,8 @@
 import bcrypt from 'bcrypt';
 import prisma from '../lib/prisma.js';      // isti singleton → vidimo SQL i tokom seed-a
 import { config } from '../config.js';
+import { DEFAULT_CATEGORIES } from '../constants/categories.js';
 
-// 13 imena iz starog data/categories.js — SAMO name + type.
-// icon preskačemo: schema nema `icon` polje (kandidat za kasnije kad diramo categories resurs).
-const CATEGORY_SEED = [
-  { name: 'Food',          type: 'expense' },
-  { name: 'Housing',       type: 'expense' },
-  { name: 'Transport',     type: 'expense' },
-  { name: 'Health',        type: 'expense' },
-  { name: 'Entertainment', type: 'expense' },
-  { name: 'Shopping',      type: 'expense' },
-  { name: 'Subscriptions', type: 'expense' },
-  { name: 'Utilities',     type: 'expense' },
-  { name: 'Salary',        type: 'income'  },
-  { name: 'Bonus',         type: 'income'  },
-  { name: 'Gift',          type: 'income'  },
-  { name: 'Investments',   type: 'income'  },
-  { name: 'Freelance',     type: 'income'  },
-];
 
 const SEED_USERS = [
   { name: 'Ana',   email: 'ana@test.com',   role: 'admin' },
@@ -43,7 +27,7 @@ async function main() {
 
     // 3. 13 kategorija za tog usera (createMany → JEDAN bulk INSERT sa više VALUES redova)
     await prisma.category.createMany({
-      data: CATEGORY_SEED.map(c => ({ ...c, userId: user.id })),
+      data: DEFAULT_CATEGORIES.map(c => ({ ...c, userId: user.id })),
     });
 
     // 4. Učitaj nazad kategorije — createMany NE vraća redove, a trebaju nam id-jevi za transakcije

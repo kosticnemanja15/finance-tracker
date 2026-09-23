@@ -1,115 +1,64 @@
-// routes/categories.js
+// routes/categories.js — A1: svaka kategorija ima vlasnika, nema deljenih.
 import { Router } from 'express';
-import { categories, getNextId } from '../data/categories.js';
+import prisma from '../lib/prisma.js';
 import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAuth } from '../middleware/auth.js';
-import { NotFoundError, ForbiddenError } from '../errors/ApiError.js';
 import {
-  CategoryIdParamSchema,
-  CategoriesQuerySchema,
-  CreateCategorySchema,
-  UpdateCategorySchema,
+  CategoryIdParamSchema, CategoriesQuerySchema, CreateCategorySchema, UpdateCategorySchema,
 } from '../schemas/categories.js';
 
 const router = Router();
 
-// GET /categories → default (svi) + moje privatne, opciono filter po type
-router.get('/',
-  requireAuth,
-  validateQuery(CategoriesQuerySchema),
+// GET / — samo MOJE kategorije (i admin vidi samo svoje — kategorije su lične)
+router.get('/', requireAuth, validateQuery(CategoriesQuerySchema),
   asyncHandler(async (req, res) => {
     const { type } = req.validatedQuery;
+    const where = { userId: req.user.id };
+    if (type) where.type = type;
 
-    // 1. Vidljivost (bezbednost): default ILI moje
-    let result = categories.filter(
-      c => c.isDefault || c.userId === req.user.id
-    );
-
-    // 2. Opcioni filter po tipu (kozmetika)
-    if (type) {
-      result = result.filter(c => c.type === type);
-    }
-
-    res.json(result);
+    const categories = await prisma.category.findMany({
+      where,
+      orderBy: { name: 'asc' },   // indeks (userId, name) pokriva WHERE + ORDER BY
+    });
+    res.json(categories);
   })
 );
 
-// POST /categories → admin pravi sistemsku, user privatnu
-router.post('/',
-  requireAuth,
-  validateBody(CreateCategorySchema),
+// POST / — userId UVEK sa servera, polja eksplicitno (ne spread req.body)
+// Duplikat imena → P2002 (korak 5 → 409)
+router.post('/', requireAuth, validateBody(CreateCategorySchema),
   asyncHandler(async (req, res) => {
-    const isAdmin = req.user.role === 'admin';
-
-    const newCategory = {
-      id: getNextId(),
-      name: req.body.name,
-      type: req.body.type,
-      icon: req.body.icon,
-      // Privilegija se odlučuje SERVERSKI na osnovu role, ne iz body-ja:
-      isDefault: isAdmin,
-      userId: isAdmin ? null : req.user.id,
-      createdAt: new Date().toISOString(),
-    };
-
-    categories.push(newCategory);
-    res.status(201).json(newCategory);
+    const { name, type } = req.body;
+    const category = await prisma.category.create({
+      data: { name, type, userId: req.user.id },
+    });
+    res.status(201).json(category);
   })
 );
 
-// PATCH /categories/:id → default samo admin, privatnu samo vlasnik
-router.patch('/:id',
-  requireAuth,
-  validateParams(CategoryIdParamSchema),
-  validateBody(UpdateCategorySchema),
+// PATCH /:id — ownership U WHERE klauzuli (jedan atomski upit)
+// Tuđa ILI nepostojeća → P2025 (korak 5 → 404, isti odgovor za oba = nema enumeracije)
+router.patch('/:id', requireAuth, validateParams(CategoryIdParamSchema), validateBody(UpdateCategorySchema),
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
-    const category = categories.find(c => c.id === id);
-
-    if (!category) throw new NotFoundError('Category not found');
-
-    // Ownership grananje (odluka: default→admin, privatna→vlasnik)
-    if (category.isDefault) {
-      if (req.user.role !== 'admin') {
-        throw new ForbiddenError('Only admin can modify default categories');
-      }
-    } else {
-      if (category.userId !== req.user.id) {
-        throw new ForbiddenError('Access denied');
-      }
-    }
-
-    // Menjamo samo name/icon (type je zaključan — schema ga i ne prima)
-    Object.assign(category, req.body);
-    res.json(category);
+    const updated = await prisma.category.update({
+      where: { id, userId: req.user.id },
+      data: { name: req.body.name },
+    });
+    res.json(updated);
   })
 );
 
-// DELETE /categories/:id → isto ownership pravilo kao PATCH
-router.delete('/:id',
-  requireAuth,
-  validateParams(CategoryIdParamSchema),
+// DELETE /:id — isto ownership pravilo
+// Ima transakcije → FK Restrict → P2003 (korak 5 → 409)
+router.delete('/:id', requireAuth, validateParams(CategoryIdParamSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
-    const index = categories.findIndex(c => c.id === id);
-
-    if (index === -1) throw new NotFoundError('Category not found');
-
-    const category = categories[index];
-
-    // Ownership grananje (isto kao PATCH)
-    if (category.isDefault) {
-      if (req.user.role !== 'admin') {
-        throw new ForbiddenError('Only admin can delete default categories');
-      }
-    } else {
-      if (category.userId !== req.user.id) {
-        throw new ForbiddenError('Access denied');
-      }
-    }
-
-    categories.splice(index, 1);
+    await prisma.category.delete({
+      where: { id, userId: req.user.id },
+      select: { id: true },
+    });
     res.status(204).end();
   })
 );

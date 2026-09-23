@@ -33,6 +33,8 @@ model Category {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
+
+  @@unique([userId, name])   // ← NOVO: jedan user ne može imati dve "Food"
 }
 
 model Transaction {

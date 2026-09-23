@@ -11,18 +11,15 @@ export const CategoriesQuerySchema = z.object({
   type: z.enum(['income', 'expense']).optional(),
 });
 
-// POST body — NE prima isDefault/userId (to server odlučuje, ne klijent)
+// POST body — NE prima userId (server odlučuje). A1: nema icon/isDefault.
 export const CreateCategorySchema = z.object({
-  name: z.string().min(1, 'Name is required').max(50, 'Name too long'),
+  name: z.string().trim().min(1, 'Name is required').max(50, 'Name too long'),
   type: z.enum(['income', 'expense']),
-  icon: z.string().min(1).max(10).default('🏷️'),
-}).strict(); // odbaci nepoznata polja → mass assignment zaštita
+}).strict(); // nepoznata polja → 400 (mass assignment zaštita)
 
-// PATCH body — samo name i icon, oba opciona, ali bar jedno mora
+// PATCH body — samo name. type je nepromenljiv:
+// transakcije nemaju svoj type, izvode ga iz kategorije → promena bi prebacila
+// sve postojeće transakcije na drugu stranu bilansa.
 export const UpdateCategorySchema = z.object({
-  name: z.string().min(1).max(50).optional(),
-  icon: z.string().min(1).max(10).optional(),
-}).strict().refine(
-  (data) => data.name !== undefined || data.icon !== undefined,
-  { message: 'At least one field (name or icon) must be provided' }
-);
+  name: z.string().trim().min(1).max(50),
+}).strict();

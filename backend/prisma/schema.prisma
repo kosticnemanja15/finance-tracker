@@ -15,8 +15,8 @@ model User {
   passwordHash String
   role         Role     @default(user)
   createdAt    DateTime @default(now())
-
-    categories   Category[]
+  isActive     Boolean  @default(true)
+  categories   Category[]
   transactions Transaction[]
 }
 

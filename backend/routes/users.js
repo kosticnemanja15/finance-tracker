@@ -1,94 +1,94 @@
+// routes/users.js
 import { Router } from 'express';
-import { users } from '../data/users.js';
+import prisma from '../lib/prisma.js';
 import { validateParams, validateBody } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { NotFoundError, ForbiddenError } from '../errors/ApiError.js';
-import { toUserDTO, toUsersDTO } from '../utils/sanitize.js';
+import { USER_PUBLIC_SELECT } from '../utils/sanitize.js';
 import { UserIdParamSchema, UpdateUserSchema } from '../schemas/users.js';
-
 
 const router = Router();
 
-// GET /users — lista svih user-a (SAMO admin)
-router.get('/',
-  requireAuth,                    // 1. ulogovan?
-  requireRole('admin'),           // 2. admin?
+// Autorizacija PRE baze: admin sve, user samo sebe.
+// Non-admin dobija 403 za svaki tuđi id, bez obzira da li postoji → nema enumeracije.
+function assertCanAccessUser(targetId, reqUser) {
+  const isAdmin = reqUser.role === 'admin';
+  const isSelf = reqUser.id === targetId;
+  if (!isAdmin && !isSelf) throw new ForbiddenError('Access denied');
+  return { isAdmin, isSelf };
+}
+
+// GET / — svi korisnici (samo admin), uključujući deaktivirane
+router.get('/', requireAuth, requireRole('admin'),
   asyncHandler(async (req, res) => {
-    res.json(toUsersDTO(users));  // 3. DTO na ceo niz — bez password_hash
+    const users = await prisma.user.findMany({
+      select: USER_PUBLIC_SELECT,
+      orderBy: { id: 'asc' },
+    });
+    res.json(users);
   })
 );
 
-
-
-// GET /users/:id — admin vidi bilo koga, user vidi samo sebe
-router.get('/:id',
-  requireAuth,                          // 1. ulogovan?
-  validateParams(UserIdParamSchema),    // 2. validan :id?
+// GET /:id — admin bilo koga, user samo sebe
+router.get('/:id', requireAuth, validateParams(UserIdParamSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
+    assertCanAccessUser(id, req.user);
 
-    // 3. Nađi user-a
-    const user = users.find(u => u.id === id);
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: USER_PUBLIC_SELECT,
+    });
     if (!user) throw new NotFoundError('User not found');
 
-    // 4. OWNERSHIP CHECK — jezgro pattern-a
-    const isAdmin = req.user.role === 'admin';
-    const isSelf = req.user.id === user.id;
-    if (!isAdmin && !isSelf) {
-      throw new ForbiddenError('Access denied');
-    }
-
-    // 5. DTO
-    res.json(toUserDTO(user));
+    res.json(user);
   })
 );
 
-// PATCH /users/:id — ownership + privilegovana polja samo admin
-router.patch('/:id',
-  requireAuth,
-  validateParams(UserIdParamSchema),
-  validateBody(UpdateUserSchema),
+// PATCH /:id — user menja sebi name/email; role i isActive samo admin
+router.patch('/:id', requireAuth, validateParams(UserIdParamSchema), validateBody(UpdateUserSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
+    const { isAdmin, isSelf } = assertCanAccessUser(id, req.user);
 
-    // 1. Nađi
-    const user = users.find(u => u.id === id);
-    if (!user) throw new NotFoundError('User not found');
-
-    // 2. Ownership — admin ili sam
-    const isAdmin = req.user.role === 'admin';
-    const isSelf = req.user.id === user.id;
-    if (!isAdmin && !isSelf) {
-      throw new ForbiddenError('Access denied');
-    }
-
-    // 3. Pattern 1 — role/isActive sme SAMO admin
+    // Privilegovana polja — samo admin
     if (!isAdmin && (req.body.role !== undefined || req.body.isActive !== undefined)) {
       throw new ForbiddenError('You cannot change role or account status');
     }
 
-    // 4. Primeni izmene (req.body je već očišćen Zod-om)
-    Object.assign(user, req.body);
+    // Self-lockout: admin ne sme sebe da degradira ili deaktivira
+    if (isSelf && (req.body.role === 'user' || req.body.isActive === false)) {
+      throw new ForbiddenError('You cannot demote or deactivate your own account');
+    }
 
-    // 5. DTO
-    res.json(toUserDTO(user));
+    // req.body je već prošao Zod → sadrži SAMO name/email/role/isActive.
+    // Nepoznata polja (npr. passwordHash) Zod izbacuje → zaštita od mass assignment-a.
+    // Nepostojeći id → Prisma baca P2025 (mapiramo u koraku 5).
+    const updated = await prisma.user.update({
+      where: { id },
+      data: req.body,
+      select: USER_PUBLIC_SELECT,
+    });
+
+    res.json(updated);
   })
 );
 
-// DELETE /users/:id — soft delete (samo admin)
-router.delete('/:id',
-  requireAuth,
-  requireRole('admin'),
-  validateParams(UserIdParamSchema),
+// DELETE /:id — SOFT delete (samo admin)
+router.delete('/:id', requireAuth, requireRole('admin'), validateParams(UserIdParamSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
 
-    const user = users.find(u => u.id === id);
-    if (!user) throw new NotFoundError('User not found');
+    if (id === req.user.id) {
+      throw new ForbiddenError('You cannot deactivate your own account');
+    }
 
-    // Soft delete — ne brišemo, deaktiviramo
-    user.isActive = false;
+    await prisma.user.update({
+      where: { id },
+      data: { isActive: false },
+      select: { id: true },
+    });
 
     res.status(204).end();
   })

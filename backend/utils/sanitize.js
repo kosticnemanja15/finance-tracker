@@ -1,4 +1,14 @@
 
+// Polja koja smeju da napuste bazu. Koristi se kao Prisma `select`.
+// passwordHash NIJE ovde — ne učitava se ni u memoriju servera.
+export const USER_PUBLIC_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  createdAt: true,
+  isActive: true,
+};
 
 export function toUserDTO(user){
     return{

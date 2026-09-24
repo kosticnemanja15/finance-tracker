@@ -217,52 +217,32 @@ router.post('/',
   })
 );
 
-// ─────────────────────────────────────────────────────────────
-// PATCH /transactions/:id  [IN-MEMORY — migrira se u Koraku 4]
-// ─────────────────────────────────────────────────────────────
-router.patch('/:id',
-  requireAuth,
-  validateParams(TransactionIdParamSchema),
-  validateBody(UpdateTransactionSchema),
+// PATCH /:id — parcijalni update
+// `type` stiže od frontenda (ugovor), ali NIJE kolona: tip živi u kategoriji.
+router.patch('/:id', requireAuth, validateParams(TransactionIdParamSchema), validateBody(UpdateTransactionSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
-
-    // 1. Nađi postojeću (treba nam za ownership + fallback vrednosti validacije)
-    const existing = await prisma.transaction.findUnique({
-      where: { id },
-      include: { category: true },
-    });
-
+    const existing = await prisma.transaction.findUnique({ where: { id }, include: { category: true } });
     if (!existing) throw new NotFoundError('Transaction not found');
-
-    // 2. Ownership (admin override)
     const isSelf = existing.userId === req.user.id;
     const isAdmin = req.user.role === 'admin';
     if (!isSelf && !isAdmin) throw new ForbiddenError('Access denied');
 
-    // 3. Ako se menja categoryId, re-validiraj.
-    //    type NIJE u body-ju (Transaction ga nema) → izvedi ga iz kategorije:
-    //    ako se menja categoryId, novi tip je tip NOVE kategorije; validacija to hvata.
-    if (req.body.categoryId !== undefined) {
-      // tip protiv kog validiramo = tip postojeće kategorije transakcije
-      // (jer transakcija "je" income/expense preko svoje kategorije)
-      const nextType = existing.category.type;
-      await assertCategoryUsable(req.body.categoryId, nextType, req.user);
+    // type izdvajamo iz body-ja — koristi se za validaciju, ne ide u Prismu
+    const { type, ...data } = req.body;
+    const targetType = type ?? existing.category.type;
+
+    if (data.categoryId !== undefined) {
+      // nova (ili ista) kategorija mora da odgovara traženom tipu
+      await assertCategoryUsable(data.categoryId, targetType, req.user);
+    } else if (targetType !== existing.category.type) {
+      // tip se ne može promeniti bez kategorije tog tipa
+      throw new BadRequestError('CATEGORY_TYPE_MISMATCH',
+        `Changing type to "${targetType}" requires a category of that type`);
     }
 
-    // 4. Update — samo poslata polja (Zod već očistio body).
-    //    date treba konverziju ako je poslat.
-    const data = { ...req.body };
-    if (data.date !== undefined) {
-      data.date = new Date(data.date);
-    }
-
-    const updated = await prisma.transaction.update({
-      where: { id },
-      data,
-      include: { category: true },
-    });
-
+    if (data.date !== undefined) data.date = new Date(data.date);
+    const updated = await prisma.transaction.update({ where: { id }, data, include: { category: true } });
     res.json(serializeTransaction(updated));
   })
 );

@@ -58,6 +58,12 @@ app.use((req, res, next) => {
 // Error handler MORA biti poslednji
 app.use(errorHandler);
 
-app.listen(config.port, () => {
+// Express 5: callback dobija grešku i kad listen NE uspe (npr. EADDRINUSE).
+// Bez provere bi pad izgledao kao uspešan start.
+app.listen(config.port, (err) => {
+  if (err) {
+    console.error(`❌ Server failed to start: ${err.message}`);
+    process.exit(1);
+  }
   console.log(`✅ Server running on http://localhost:${config.port} [${config.env}]`);
 });

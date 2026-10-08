@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // app runtime → pooled (PgBouncer)
+  directUrl = env("DIRECT_URL")     // prisma migrate → direktno na Postgres
 }
 
 model User {

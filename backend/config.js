@@ -32,6 +32,14 @@ function toOrigin(value) {
   }
 }
 
+// Broj proxy hopova ispred aplikacije (koristi se samo u produkciji).
+// Meri se, ne pogađa: premalo → req.ip je proxy; previše → klijent lažira IP kroz X-Forwarded-For.
+const trustProxyHops = parseInt(process.env.TRUST_PROXY_HOPS || '1', 10);
+if (!Number.isInteger(trustProxyHops) || trustProxyHops < 1) {
+  console.error(`❌ Invalid TRUST_PROXY_HOPS: ${process.env.TRUST_PROXY_HOPS}`);
+  process.exit(1);
+}
+
 export const config = {
   jwt: {
     secret: process.env.JWT_SECRET,
@@ -43,4 +51,5 @@ export const config = {
   port: parseInt(process.env.PORT || '3000', 10),
   env,
   frontendUrl: toOrigin(process.env.FRONTEND_URL),
+  trustProxyHops,
 };

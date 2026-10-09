@@ -14,9 +14,9 @@ import transactionsRouter from './routes/transactions.js';
 
 const app = express();
 
-// Render (kao svaki PaaS) stavlja proxy-je ispred aplikacije.
-// Bez ovoga req.ip = IP proxy-ja → rate limiter broji SVE posetioce kao jednog.
-// Broj hopova dolazi iz TRUST_PROXY_HOPS (izmeren na Renderu, ne pretpostavljen).
+// Render ispred aplikacije: Cloudflare → Render load balancer → lokalni proxy (::1) → Node.
+// TRUST_PROXY_HOPS=3 izmeren na Renderu (Dan 10). Premalo → req.ip je proxy;
+// previše → klijent lažira IP kroz X-Forwarded-For (Render DOPISUJE na heder klijenta).
 if (config.env === 'production') {
   app.set('trust proxy', config.trustProxyHops);
 }
@@ -40,17 +40,6 @@ app.get('/health', (req, res) => {
     status: 'ok',
     env: config.env,
     timestamp: new Date().toISOString(),
-  });
-});
-
-// ⚠️ PRIVREMENO (Dan 10) — merenje proxy lanca na Renderu. UKLONITI posle merenja.
-app.get('/debug/ip', (req, res) => {
-  res.json({
-    ip: req.ip,
-    ips: req.ips,
-    xff: req.headers['x-forwarded-for'] ?? null,
-    socket: req.socket.remoteAddress,
-    trustProxy: app.get('trust proxy'),
   });
 });
 

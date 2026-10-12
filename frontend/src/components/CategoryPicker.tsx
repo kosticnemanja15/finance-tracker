@@ -1,6 +1,7 @@
 'use client';
 
 import { useCategories } from '@/context/CategoriesContext';
+import { getCategoryIcon } from '@/lib/categoryIcons';
 
 interface CategoryPickerProps {
   value: number | undefined;
@@ -39,7 +40,7 @@ export function CategoryPicker({
       </option>
       {options.map((c) => (
         <option key={c.id} value={c.id}>
-          {c.icon} {c.name}
+          {getCategoryIcon(c.name)} {c.name}
         </option>
       ))}
     </select>

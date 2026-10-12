@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCategories } from '@/context/CategoriesContext';
 import { formatSignedMoney } from '@/lib/format';
+import { getCategoryIcon } from '@/lib/categoryIcons';
 import type { Transaction } from '@/types';
 
 // FIX: bila hardkodovana sr-RS logika bez €. Sad kroz formatSignedMoney (EUR).
@@ -16,10 +17,11 @@ function formatAmount(t: Transaction) {
   };
 }
 
-// Engleski datum umesto sr-RS
+// API šalje "YYYY-MM-DD" → new Date() ga tumači kao ponoć UTC.
+// Bez timeZone: 'UTC' browser u GMT−5 prikaže DAN RANIJE.
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
+    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC',
   });
 }
 
@@ -32,7 +34,7 @@ const selectClass =
 export default function TransactionsPage() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
-  const { categories, getById } = useCategories();
+  const { categories } = useCategories();
 
   const { transactions, pagination, isLoading, error } = useTransactions({
     type: filters.type ? (filters.type as 'income' | 'expense') : undefined,
@@ -90,7 +92,7 @@ export default function TransactionsPage() {
           <select value={filters.categoryId} onChange={(e) => handleChange('categoryId', e.target.value)} className={selectClass}>
             <option value="">All</option>
             {categoryOptions.map((c) => (
-              <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+              <option key={c.id} value={c.id}>{getCategoryIcon(c.name)} {c.name}</option>
             ))}
           </select>
         </div>
@@ -130,7 +132,9 @@ export default function TransactionsPage() {
       {!isLoading && !error && transactions.length > 0 && (
         <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface shadow-card">
           {transactions.map((t) => {
-            const category = getById(t.categoryId);
+            // Ugnežđena kategorija iz API-ja — radi i za tuđe transakcije (admin),
+            // za razliku od lookup-a u kategorijama ulogovanog korisnika.
+            const category = t.category;
             const amount = formatAmount(t);
             return (
               <li key={t.id}>
@@ -140,10 +144,10 @@ export default function TransactionsPage() {
                 >
                   <div className="flex items-center gap-3">
                     <span className="grid h-11 w-11 flex-none place-items-center rounded-btn bg-surface-2 text-xl">
-                      {category?.icon ?? '❓'}
+                      {getCategoryIcon(category.name)}
                     </span>
                     <div>
-                      <p className="font-medium text-ink">{category?.name ?? 'Unknown category'}</p>
+                      <p className="font-medium text-ink">{category.name}</p>
                       <p className="text-sm text-ink-subtle">{t.description}</p>
                     </div>
                   </div>

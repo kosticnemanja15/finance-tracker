@@ -49,6 +49,16 @@ model Transaction {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   categoryId Int
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  // Postgres NE indeksira foreign key sam. Glavni upit aplikacije je
+  // WHERE "userId" = ? ORDER BY "date" DESC LIMIT n (lista transakcija).
+  // Jednakost (userId) prva, sort/opseg (date) drugi → redovi jednog korisnika su
+  // uzastopni, već sortiran blok u indeksu. Levi prefiks pokriva i upite samo
+  // po userId (count, /stats groupBy).
+  // Izmereno (Dan 11, 11k redova, korisnik sa 505):
+  //   lista: Seq Scan + Sort, 104 stranice, 1.56 ms → Index Scan Backward, 17, 0.07 ms
+  //   count: Seq Scan, 104 stranice, 1.78 ms       → Index Only Scan, 6, 0.37 ms
+  @@index([userId, date])
 }
 
 enum TxType {

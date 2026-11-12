@@ -23,6 +23,21 @@ if (config.env === 'production') {
 
 // Middleware chain — redosled je bitan
 app.use(helmet());
+
+// Health check — PRE morgan-a i rate limitera (Dan 11, incident 429).
+// Render ga gađa na ~5 s sa iste interne adrese → globalLimiter (100 / 15 min po req.ip)
+// ga je posle ~8 min odbijao sa 429 → Render: "Instance failed" → restart instance.
+// Infrastrukturne probe se ne broje kao posetioci i ne pune log (~720 linija/h);
+// neuspeh health check-a Render prijavljuje u Events.
+// Namerno plitak (bez upita bazi): ne sme da drži Neon budnim (kvota CU-sati).
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    env: config.env,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.use(morgan(config.env === 'production' ? 'combined' : 'dev'));
 app.use(globalLimiter);
 app.use(cors({
@@ -33,15 +48,6 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '10kb' }));
-
-// Health check — dokazuje da ceo chain radi
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    env: config.env,
-    timestamp: new Date().toISOString(),
-  });
-});
 
 // Routes
 app.use('/auth', authRouter);

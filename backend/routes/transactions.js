@@ -1,13 +1,14 @@
-// routes/transactions.js
+// routes/transactions.js — transakcije su LIČNE za sve uloge (Dan 12, opcija A).
+// Admin uloga važi za /users (RBAC), ne za tuđe finansije (least privilege).
+// Ownership pravilo: userId je UVEK u WHERE klauzuli (findFirst / update / delete),
+// nikad provera u JS-u posle čitanja. Tuđe = nepostojeće = 404 (nema enumeracije id-jeva).
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { serializeTransaction, serializeTransactions } from '../utils/serialize.js';
-// PRIVREMENO još potrebni za /:id, POST, PATCH, DELETE (migriramo ih u Koraku 4):
-
 import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAuth } from '../middleware/auth.js';
-import { NotFoundError, ForbiddenError, BadRequestError } from '../errors/ApiError.js';
+import { NotFoundError, BadRequestError } from '../errors/ApiError.js';
 import {
   TransactionIdParamSchema,
   CreateTransactionSchema,
@@ -19,26 +20,21 @@ import {
 const router = Router();
 
 /**
- * Cross-resource validacija kategorije — sada čita iz baze.
- * (1) postoji, (2) pripada useru, (3) tip se poklapa sa transakcijom.
- * async je jer radi DB upit.
+ * Cross-resource validacija kategorije.
+ * (1) postoji I pripada useru — jedan upit, ownership u WHERE-u
+ * (2) tip se poklapa sa transakcijom
+ * Tuđa i nepostojeća kategorija → ISTI odgovor (400 CATEGORY_NOT_FOUND).
+ * Ranije: tuđa → 403, nepostojeća → 400 → po razlici se videlo da tuđi id postoji.
  */
-async function assertCategoryUsable(categoryId, transactionType, user) {
-  const category = await prisma.category.findUnique({
-    where: { id: categoryId },
+async function assertCategoryUsable(categoryId, transactionType, userId) {
+  const category = await prisma.category.findFirst({
+    where: { id: categoryId, userId },
   });
 
-  // 1. Postoji?
   if (!category) {
     throw new BadRequestError('CATEGORY_NOT_FOUND', 'Category does not exist');
   }
 
-  // 2. Pripada useru? (A1: nema više isDefault — svaka kategorija ima vlasnika)
-  if (category.userId !== user.id) {
-    throw new ForbiddenError('Category not accessible');
-  }
-
-  // 3. Tip se poklapa?
   if (category.type !== transactionType) {
     throw new BadRequestError(
       'CATEGORY_TYPE_MISMATCH',
@@ -50,7 +46,7 @@ async function assertCategoryUsable(categoryId, transactionType, user) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// GET /transactions → moje (admin sve) + filteri + pagination  [MIGRIRANO — Korak 2 v2]
+// GET /transactions → samo MOJE + filteri + pagination
 // ─────────────────────────────────────────────────────────────
 router.get('/',
   requireAuth,
@@ -58,17 +54,18 @@ router.get('/',
   asyncHandler(async (req, res) => {
     const { type, categoryId, from, to, page, limit } = req.validatedQuery;
 
-    // Ownership je osnova where-a: admin {} (sve), user { userId }.
-    const where = req.user.role === 'admin'
-      ? {}
-      : { userId: req.user.id };
+    // Ownership je UVEK osnova where-a — i za admina (Dan 12, opcija A).
+    // Transakcije su lični finansijski podaci; admin uloga važi za /users (RBAC),
+    // ne za tuđe finansije (least privilege, GDPR minimizacija).
+    // Posledica: WHERE "userId" = $1 je uvek prisutan → indeks (userId, date) radi za svakoga.
+    const where = { userId: req.user.id };
 
     // Filteri — svaki dodaje ključ SAMO ako je poslat.
     if (type) {
       where.category = { type };   // type je na kategoriji → filter kroz relaciju
     }
     if (categoryId) {
-      where.categoryId = categoryId;
+      where.categoryId = categoryId;   // tuđ categoryId → prazan rezultat (userId ga seče)
     }
 
     // Datum opseg — from/to su stringovi, Prisma hoće Date + gte/lte.
@@ -85,7 +82,7 @@ router.get('/',
     const [data, total] = await Promise.all([
       prisma.transaction.findMany({
         where,
-        include: { category: true },   // anti-N+1
+        include: { category: true },   // anti-N+1 (Prisma 6: drugi upit sa IN listom)
         orderBy: { date: 'desc' },
         skip,
         take: limit,
@@ -103,7 +100,8 @@ router.get('/',
 );
 
 // ─────────────────────────────────────────────────────────────
-// GET /transactions/stats  [IN-MEMORY — migrira se u Koraku 6]
+// GET /transactions/stats — lično, isto pravilo kao lista
+// (mora biti registrovan PRE /:id, inače "stats" završi kao :id)
 // ─────────────────────────────────────────────────────────────
 router.get('/stats',
   requireAuth,
@@ -111,11 +109,10 @@ router.get('/stats',
   asyncHandler(async (req, res) => {
     const { year, month } = req.validatedQuery;
 
-    // 1. Bazni where: samo moje transakcije (stats je uvek lični, ne admin-sve)
+    // 1. Bazni where: samo moje transakcije
     const where = { userId: req.user.id };
 
     // 2. Datumski filter — year/month postaju opseg [from, to).
-    //    Umesto starog date.startsWith trika: pravi DateTime opseg.
     if (year) {
       const from = new Date(Date.UTC(year, month ? month - 1 : 0, 1));
       const to = month
@@ -131,7 +128,15 @@ router.get('/stats',
       _sum: { amount: true },
     });
 
-    // 4. Treba nam ime + tip svake kategorije (groupBy vraća samo categoryId + sumu).
+    // 4. Prazan period → rani izlaz sa nulama, bez drugog upita.
+    //    Bez ovoga Prisma za `in: []` šalje `WHERE 1=0` (IN () je nevalidan SQL):
+    //    baza ga reši bez čitanja tabele, ali to je i dalje mrežni round-trip
+    //    (u produkciji Render → Neon). Oblik odgovora isti kao inače (ugovor).
+    if (grouped.length === 0) {
+      return res.json({ totalIncome: 0, totalExpense: 0, balance: 0, byCategory: [] });
+    }
+
+    // 5. Treba nam ime + tip svake kategorije (groupBy vraća samo categoryId + sumu).
     //    Jedan upit za sve kategorije iz rezultata (anti-N+1, IN lista).
     const categoryIds = grouped.map(g => g.categoryId);
     const categories = await prisma.category.findMany({
@@ -139,7 +144,7 @@ router.get('/stats',
     });
     const catMap = new Map(categories.map(c => [c.id, c]));
 
-    // 5. Sastavi byCategory + izračunaj totale iz istih podataka.
+    // 6. Sastavi byCategory + izračunaj totale iz istih podataka.
     let totalIncome = 0;
     let totalExpense = 0;
     const byCategory = grouped.map(g => {
@@ -164,7 +169,8 @@ router.get('/stats',
 );
 
 // ─────────────────────────────────────────────────────────────
-// GET /transactions/:id  [IN-MEMORY — migrira se u Koraku 4]
+// GET /transactions/:id — ownership U WHERE klauzuli (jedan upit)
+// Tuđa ILI nepostojeća → null → 404 (isti odgovor = nema enumeracije id-jeva)
 // ─────────────────────────────────────────────────────────────
 router.get('/:id',
   requireAuth,
@@ -172,24 +178,22 @@ router.get('/:id',
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
 
-    const transaction = await prisma.transaction.findUnique({
-      where: { id },
+    // findFirst (ne findUnique): where ima i ne-unique polje (userId).
+    // Vraća null kad nema reda — NE baca P2025 (to rade update/delete),
+    // zato 404 bacamo sami.
+    const transaction = await prisma.transaction.findFirst({
+      where: { id, userId: req.user.id },
       include: { category: true },
     });
 
     if (!transaction) throw new NotFoundError('Transaction not found');
-
-    // Ownership (admin override) — ista logika, radi na objektu iz baze
-    const isSelf = transaction.userId === req.user.id;
-    const isAdmin = req.user.role === 'admin';
-    if (!isSelf && !isAdmin) throw new ForbiddenError('Access denied');
 
     res.json(serializeTransaction(transaction));   // Decimal→number, jednina
   })
 );
 
 // ─────────────────────────────────────────────────────────────
-// POST /transactions  [IN-MEMORY — migrira se u Koraku 4]
+// POST /transactions
 // ─────────────────────────────────────────────────────────────
 router.post('/',
   requireAuth,
@@ -197,8 +201,7 @@ router.post('/',
   asyncHandler(async (req, res) => {
     const { type, amount, categoryId, description, date } = req.body;
 
-    // Validacija kategorije iz baze (await jer je sad async)
-    await assertCategoryUsable(categoryId, type, req.user);
+    await assertCategoryUsable(categoryId, type, req.user.id);
 
     const transaction = await prisma.transaction.create({
       data: {
@@ -207,8 +210,8 @@ router.post('/',
         description,
         date: new Date(date),          // string "YYYY-MM-DD" → Date za DateTime kolonu
         categoryId,
-        // NAPOMENA: nema `type` — Transaction nema tu kolonu (izvodi se iz kategorije)
-        // NAPOMENA: nema `id`/`createdAt` — baza ih daje (autoincrement / default now())
+        // nema `type` — Transaction nema tu kolonu (izvodi se iz kategorije)
+        // nema `id`/`createdAt` — baza ih daje (autoincrement / default now())
       },
       include: { category: true },     // vrati sa kategorijom, kao GET
     });
@@ -217,38 +220,57 @@ router.post('/',
   })
 );
 
-// PATCH /:id — parcijalni update
+// ─────────────────────────────────────────────────────────────
+// PATCH /transactions/:id — parcijalni update
+// Dva upita, OBA sa ownership-om u WHERE-u:
+//   1) findFirst — treba nam postojeći tip (iz kategorije) za validaciju promene tipa
+//   2) update    — userId i ovde: odbrana u dubini, ne oslanjamo se samo na (1)
+// Red obrisan između (1) i (2) → P2025 → mapPrismaError → 404.
 // `type` stiže od frontenda (ugovor), ali NIJE kolona: tip živi u kategoriji.
-router.patch('/:id', requireAuth, validateParams(TransactionIdParamSchema), validateBody(UpdateTransactionSchema),
+// ─────────────────────────────────────────────────────────────
+router.patch('/:id',
+  requireAuth,
+  validateParams(TransactionIdParamSchema),
+  validateBody(UpdateTransactionSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
-    const existing = await prisma.transaction.findUnique({ where: { id }, include: { category: true } });
+    const userId = req.user.id;
+
+    const existing = await prisma.transaction.findFirst({
+      where: { id, userId },
+      select: { category: { select: { type: true } } },   // treba nam samo trenutni tip
+    });
     if (!existing) throw new NotFoundError('Transaction not found');
-    const isSelf = existing.userId === req.user.id;
-    const isAdmin = req.user.role === 'admin';
-    if (!isSelf && !isAdmin) throw new ForbiddenError('Access denied');
 
     // type izdvajamo iz body-ja — koristi se za validaciju, ne ide u Prismu
     const { type, ...data } = req.body;
-    const targetType = type ?? existing.category.type;
+    const currentType = existing.category.type;
+    const targetType = type ?? currentType;
 
     if (data.categoryId !== undefined) {
-      // nova (ili ista) kategorija mora da odgovara traženom tipu
-      await assertCategoryUsable(data.categoryId, targetType, req.user);
-    } else if (targetType !== existing.category.type) {
+      // nova (ili ista) kategorija mora biti moja i odgovarati traženom tipu
+      await assertCategoryUsable(data.categoryId, targetType, userId);
+    } else if (targetType !== currentType) {
       // tip se ne može promeniti bez kategorije tog tipa
       throw new BadRequestError('CATEGORY_TYPE_MISMATCH',
         `Changing type to "${targetType}" requires a category of that type`);
     }
 
     if (data.date !== undefined) data.date = new Date(data.date);
-    const updated = await prisma.transaction.update({ where: { id }, data, include: { category: true } });
+
+    const updated = await prisma.transaction.update({
+      where: { id, userId },
+      data,
+      include: { category: true },
+    });
+
     res.json(serializeTransaction(updated));
   })
 );
 
 // ─────────────────────────────────────────────────────────────
-// DELETE /transactions/:id  [IN-MEMORY — migrira se u Koraku 4]
+// DELETE /transactions/:id — jedan upit, ownership u WHERE-u
+// Tuđa ILI nepostojeća → P2025 → mapPrismaError → 404 (isto kao categories.js)
 // ─────────────────────────────────────────────────────────────
 router.delete('/:id',
   requireAuth,
@@ -256,19 +278,9 @@ router.delete('/:id',
   asyncHandler(async (req, res) => {
     const { id } = req.validatedParams;
 
-    // Nađi prvo — za ownership proveru (i da razlikujemo 404 od 403)
-    const existing = await prisma.transaction.findUnique({
-      where: { id },
-    });
-
-    if (!existing) throw new NotFoundError('Transaction not found');
-
-    const isSelf = existing.userId === req.user.id;
-    const isAdmin = req.user.role === 'admin';
-    if (!isSelf && !isAdmin) throw new ForbiddenError('Access denied');
-
     await prisma.transaction.delete({
-      where: { id },
+      where: { id, userId: req.user.id },
+      select: { id: true },   // ne treba nam ceo red nazad
     });
 
     res.status(204).end();   // 204 No Content — nema tela u odgovoru

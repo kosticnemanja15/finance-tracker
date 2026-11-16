@@ -44,8 +44,8 @@ export default function TransactionDetailPage() {
       } catch (err) {
         if (signal.cancelled) return;
         if (err instanceof ApiError) {
-          if (err.status === 403) setLoadError("You don't have access to this transaction.");
-          else if (err.status === 404) setLoadError('Transaction not found.');
+          // Tuđa i nepostojeća transakcija → API vraća isti 404 (bez enumeracije id-jeva).
+          if (err.status === 404) setLoadError('Transaction not found.');
           else setLoadError(err.message);
         } else {
           setLoadError('Error loading transaction.');
@@ -97,7 +97,7 @@ export default function TransactionDetailPage() {
     );
   }
 
-  // --- RENDER: 403 / 404 / greška ---
+  // --- RENDER: 404 / greška ---
   if (loadError) {
     return (
       <div className="min-h-screen p-8">

@@ -132,8 +132,8 @@ export default function TransactionsPage() {
       {!isLoading && !error && transactions.length > 0 && (
         <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface shadow-card">
           {transactions.map((t) => {
-            // Ugnežđena kategorija iz API-ja — radi i za tuđe transakcije (admin),
-            // za razliku od lookup-a u kategorijama ulogovanog korisnika.
+            // Ugnežđena kategorija iz API-ja (include na backendu) —
+            // nema dodatnog lookup-a u CategoriesContext-u po categoryId.
             const category = t.category;
             const amount = formatAmount(t);
             return (
